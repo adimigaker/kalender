@@ -3,12 +3,27 @@ const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 let state={profiles:[],items:[],active:null,key:'kalender',y:new Date().getFullYear(),m:new Date().getMonth()};
 function getKey(){return state.key;}
 function authHeaders(){return {apikey:SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Content-Type':'application/json','Prefer':'return=representation'};}
-async function sel(q){const k=getKey();const s=q.includes('?')?'&':'?';let url=SUPABASE_URL+q+s+'calendar_key=eq.'+encodeURIComponent(k);if(q.includes('cal_items'))url+='&deleted_at=is.null';const r=await fetch(url,{headers:{apikey:SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON}});if(!r.ok)return[];return r.json();}
-async function ins(t,obj){const k=getKey();obj.calendar_key=k;const r=await fetch(SUPABASE_URL+'/rest/v1/'+t,{method:'POST',headers:authHeaders(),body:JSON.stringify(obj)});if(!r.ok){alert(await r.text());throw new Error('err');}return r.json();}
+
+async function sel(q){
+  try {
+    const k=getKey(); const s=q.includes('?')?'&':'?';
+    let url=SUPABASE_URL+q+s+'calendar_key=eq.'+encodeURIComponent(k);
+    if(q.includes('cal_items'))url+='&deleted_at=is.null';
+    const r=await fetch(url,{headers:{apikey:SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON}});
+    if(!r.ok)return[];
+    return r.json();
+  }catch(e){return [];}
+}
+
+async function ins(t,obj){
+  const k=getKey(); obj.calendar_key=k;
+  const r=await fetch(SUPABASE_URL+'/rest/v1/'+t,{method:'POST',headers:authHeaders(),body:JSON.stringify(obj)});
+  if(!r.ok){ const txt=await r.text(); console.error(txt); throw new Error('err'); }
+  return r.json();
+}
 
 const BLN=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const PASARAN=['Legi','Pahing','Pon','Wage','Kliwon'];
-const HARI_JAWA=['Ahad','Senen','Selasa','Rabu','Kemis','Jumat','Sabtu'];
 
 function gregorianToJd(d,m,y){return Math.floor((1461*(y+4800+Math.floor((m-14)/12)))/4)+Math.floor((367*(m-2-12*Math.floor((m-14)/12)))/12)-Math.floor((3*Math.floor((y+4900+Math.floor((m-14)/12))/100))/4)+d-32075;}
 
@@ -21,12 +36,12 @@ function pasaranName(y,m,d){
 function hijriOf(d,m,y){
   try{
     const dt=new Date(y,m,d);
-    const f=new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura',{day:'numeric',month:'numeric',year:'numeric'});
+    const f=new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura',{day:'numeric',month:'numeric'});
     const parts=f.formatToParts(dt);
     const o={};
     parts.forEach(p=>o[p.type]=p.value);
-    return {y:o.year,m:o.month,d:o.day};
-  }catch(e){return null;}
+    return o.day || '';
+  }catch(e){return '';}
 }
 
 function render(){
@@ -34,11 +49,12 @@ function render(){
   const subh=document.getElementById('small');
   const first=new Date(state.y,state.m,1), last=new Date(state.y,state.m+1,0);
   const now=new Date();
-  const bln=hijriOf(1,state.m,state.y);
+  const hjFirst=hijriOf(1,state.m,state.y);
+  const hjLast=hijriOf(last.getDate(),state.m,state.y);
   let sub=BLN[state.m]+' '+state.y;
-  if(bln) sub+=' / '+bln.d+' '+bln.m+' '+bln.y+' H';
-  if(head) head.textContent=BLN[state.m]+' '+state.y;
+  head.textContent=BLN[state.m]+' '+state.y;
   if(subh) subh.textContent=sub;
+
   const fd=(first.getDay()+6)%7;
   let html='<div class="dow">';
   ['SEN','SEL','RAB','KAM','JUM','SAB','MIN'].forEach((h,i)=>html+='<div class="d'+i+'">'+h+'</div>');
@@ -49,7 +65,7 @@ function render(){
     const hj=hijriOf(d,state.m,state.y);
     const ps=pasaranName(state.y,state.m,d);
     const today=now.getFullYear()==state.y&&now.getMonth()==state.m&&now.getDate()==d;
-    html+='<div class="cell wd'+wd+(today?' today':'')+'"><div class="g">'+d+'</div><div class="p">'+ps+'</div>'+(hj?'<div class="h">'+hj.d+'</div>':'')+'</div>';
+    html+='<div class="cell wd'+wd+(today?' today':'')+'"><div class="h">'+hj+'</div><div class="g">'+d+'</div><div class="p">'+ps+'</div></div>';
   }
   html+='</div>';
   const cal=document.getElementById('cal');
@@ -57,14 +73,14 @@ function render(){
 }
 
 async function load(){
-  try {
-    state.profiles=await sel('/rest/v1/cal_profiles?select=*');
-    state.items=await sel('/rest/v1/cal_items?select=*');
-    if(state.profiles.length===0){
+  state.profiles=await sel('/rest/v1/cal_profiles?select=*');
+  state.items=await sel('/rest/v1/cal_items?select=*');
+  if(state.profiles.length===0){
+    try{
       const r=await ins('cal_profiles',{name:'Profil A (Jurnal Keseharian)'});
       state.profiles=r; state.active=r[0].id;
-    }else if(!state.active) state.active=state.profiles[0].id;
-  }catch(e){console.error(e);}
+    }catch(e){}
+  }else if(!state.active) state.active=state.profiles[0].id;
   render();
 }
 

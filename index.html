@@ -3,47 +3,33 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0f172a">
 <title>Kalender</title>
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
 <style>
 :root{--bg:#0f172a;--card:#162032;--text:#e2e8f0;--sub:#94a3b8;--border:#334155;--blue:#60a5fa;--green:#34d399;--red:#f87171}
-*{margin:0;padding:0;box-sizing:border-box;font-family:ui-sans-serif,system-ui}
-body{background:var(--bg);color:var(--text)}
-header{padding:1rem;display:flex;align-items:center;gap:.5rem;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(15,23,42,.95);backdrop-filter:blur(8px);z-index:10}
-header h1{flex:1}
-header .big{font-size:1.8rem;font-weight:700}
-header .small{font-size:.75rem;color:var(--sub)}
-.btn{padding:.4rem .6rem;border:1px solid var(--border);background:#334155;color:var(--text);border-radius:.5rem;font-size:.9rem}
-main{padding:1rem;max-width:1024px;margin:0 auto}
-.dow{display:grid;grid-template-columns:repeat(7,1fr);gap:.25rem;margin-bottom:.5rem}
-.dow>div{text-align:center;font-size:.75rem;font-weight:600}
-.d0{color:var(--blue)}.d1{color:var(--blue)}.d2{color:var(--blue)}.d3{color:var(--blue)}.d4{color:var(--green)}.d5{color:var(--green)}.d6{color:var(--red)}
-.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:.25rem}
-.cell{border:1px solid var(--border);border-radius:.5rem;min-height:110px;padding:.4rem;background:var(--card);display:flex;flex-direction:column;gap:.25rem}
-.cell.empty{background:transparent;border-color:transparent}
-.cell.wd6{background:#1e1525;border-color:#7f1d1d} /* minggu */
-.cell.wd4, .cell.wd5{background:#15251c} /* jumat-sabtu */
-.cell.today{box-shadow:0 0 0 1px var(--blue) inset}
-.g{font-size:1.4rem;font-weight:700}
-.p{font-size:.75rem;color:var(--sub)}
-.h{font-size:.7rem;color:var(--sub);margin-top:auto}
+body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui;margin:0;padding:0}
+header{padding:1rem;border-bottom:1px solid var(--border)}
+.big{font-size:1.5rem;font-weight:700}
+.small{font-size:.8rem;color:var(--sub)}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);padding:.5rem 0;font-weight:600;font-size:.7rem;text-align:center}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);border:1px solid var(--border)}
+.cell{background:var(--card);min-height:80px;position:relative;padding:5px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.g{font-size:1.2rem;font-weight:700}
+.h{position:absolute;top:2px;right:4px;font-size:.6rem;color:var(--blue)}
+.p{font-size:.6rem;color:var(--sub);margin-top:2px}
+.btn{padding:.4rem;background:#334155;color:white;border:none;border-radius:4px}
 </style>
 </head>
 <body>
 <header>
-<button class="btn" id="prev">←</button>
-<h1>
-  <div class="big" id="big"></div>
-  <div class="small" id="small"></div>
-</h1>
-<button class="btn" id="next">→</button>
-<button class="btn" id="today">Hari ini</button>
+<div class="big" id="big"></div>
+<div class="small" id="small"></div>
+<div style="margin-top:10px">
+  <button class="btn" id="prev">←</button>
+  <button class="btn" id="today">Hari ini</button>
+  <button class="btn" id="next">→</button>
+</div>
 </header>
-<main>
 <div id="cal"></div>
-</main>
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>
