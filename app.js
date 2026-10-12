@@ -1,5 +1,5 @@
 const SUPABASE_URL = 'https://eogdtpkiwzlarllnxsrj.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvZ2R0cGtpd3psYXJsbG54c3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODg0NzMsImV4cCI6MjA4OTY2NDQ3M30.eZPbYTuaDerKL9SOEa4ctkxSlU1PiEAU9l42czgYOyI';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvZ2R0cGtpd3psYXJsbG54c3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5NDEzNTksImV4cCI6MjA3NDUxNzM1OX0.5iQ8Az3LpGXpXW-GqMwf1u9B0U1-B3LGoS2aNRc4PpU';
 let state={profiles:[],items:[],active:null,key:'kalender',y:new Date().getFullYear(),m:new Date().getMonth()};
 
 function getKey(){return state.key;}
@@ -20,16 +20,21 @@ async function ins(t,obj){
   return r.json();
 }
 
-function monthName(m){return ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][m];}
+const HARI=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+const BLN=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 
 function render(){
-  const head=document.getElementById('month'); head.textContent=monthName(state.m)+' '+state.y;
+  const head=document.getElementById('month'); head.textContent=BLN[state.m]+' '+state.y;
   const first=new Date(state.y,state.m,1), last=new Date(state.y,state.m+1,0);
-  const fd=first.getDay(); // 0 sun
-  let html='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:.25rem">';
-  for(let i=0;i<fd;i++) html+='<div></div>';
+  const fd=first.getDay();
+  const now=new Date();
+  const isToday=(d)=> now.getFullYear()==state.y&&now.getMonth()==state.m&&now.getDate()==d;
+  let html='<div class="dow">';
+  ['Min','Sen','Sel','Rab','Kam','Jum','Sab'].forEach(h=>html+='<div>'+h+'</div>');
+  html+='</div><div class="grid">';
+  for(let i=0;i<fd;i++) html+='<div class="cell empty"></div>';
   for(let d=1;d<=last.getDate();d++){
-    html+='<div style="padding:.5rem;border:1px solid #334155;border-radius:.5rem;min-height:70px;font-size:.9rem">'+d+'</div>';
+    html+='<div class="cell '+(isToday(d)?'today':'')+'"><div class="dnum">'+d+'</div></div>';
   }
   html+='</div>';
   document.getElementById('cal').innerHTML=html;
