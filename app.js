@@ -1,32 +1,23 @@
 const SUPABASE_URL = 'https://eogdtpkiwzlarllnxsrj.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvZ2R0cGtpd3psYXJsbG54c3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODg0NzMsImV4cCI6MjA4OTY2NDQ3M30.eZPbYTuaDerKL9SOEa4ctkxSlU1PiEAU9l42czgYOyI';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvZ2R0cGtpd3psYXJsbG54c3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5NDEzNTksImV4cCI6MjA3NDUxNzM1OX0.5iQ8Az3LpGXpXW-GqMwf1u9B0U1-B3LGoS2aNRc4PpU';
 
-let state={profiles:[],items:[],active:null,key:''};
+let state={profiles:[],items:[],active:null,key:'kalender'};
 
-function getKey(){
-  if(state.key)return state.key;
-  let k=localStorage.getItem('kal_key');
-  if(!k){ k=prompt('Masukkan calendar_key'); if(!k)return ''; localStorage.setItem('kal_key',k);}
-  state.key=k;return k;
-}
+function getKey(){ return state.key; }
 function authHeaders(){return {apikey:SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Content-Type':'application/json','Prefer':'return=representation'};}
 
 async function sel(q){
-  const k=getKey(); if(!k)throw new Error('no key');
+  const k=getKey();
   const s=q.includes('?')?'&':'?';
   const r=await fetch(SUPABASE_URL+q+s+'calendar_key=eq.'+encodeURIComponent(k)+'&deleted_at=is.null',{headers:{apikey:SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON}});
-  if(!r.ok) throw new Error('LOAD:'+r.status);
+  if(!r.ok) throw new Error('ERR'+r.status);
   return r.json();
 }
 async function ins(t,obj){
-  const k=getKey(); if(!k)throw new Error('no key');
+  const k=getKey();
   obj.calendar_key=k;
   const r=await fetch(SUPABASE_URL+'/rest/v1/'+t,{method:'POST',headers:authHeaders(),body:JSON.stringify(obj)});
-  if(!r.ok){
-    const txt=await r.text();
-    alert('Gagal simpan: '+txt);
-    throw new Error(txt);
-  }
+  if(!r.ok){ const txt=await r.text(); alert(txt); throw new Error(txt); }
   return r.json();
 }
 
@@ -41,7 +32,7 @@ function render(){
   });
   const grid=document.getElementById('grid'); grid.innerHTML='';
   const items=state.items.filter(x=>x.profile_id===state.active).sort((a,b)=> (a.start_at||'')>(b.start_at||'')?1:-1);
-  if(items.length===0){ grid.innerHTML='<div class="card"><h2>Kosong</h2><div>Belum ada catatan di profil ini.</div></div>'; return;}
+  if(items.length===0){ grid.innerHTML='<div class="card"><h2>Kosong</h2><div>Belum ada catatan</div></div>'; return;}
   items.forEach(it=>{
     const d=document.createElement('div'); d.className='item';
     const w=it.all_day?'Seharian':(it.start_at||'')+(it.end_at?(' - '+it.end_at):'');
@@ -52,17 +43,14 @@ function render(){
 
 async function load(){
   try{
-    const k=getKey(); if(!k)return;
     state.profiles=await sel('/rest/v1/cal_profiles?select=*');
     state.items=await sel('/rest/v1/cal_items?select=*');
     if(state.profiles.length===0){
-      try{
-        const r=await ins('cal_profiles',{name:'Profil A (Jurnal Keseharian)'});
-        state.profiles=r; state.active=r[0].id;
-      }catch(e){ console.error('auto-create',e); }
+      const r=await ins('cal_profiles',{name:'Profil A (Jurnal Keseharian)'});
+      state.profiles=r; state.active=r[0].id;
     }else if(!state.active){ state.active=state.profiles[0].id; }
     render();
-  }catch(e){ alert('Load gagal: '+e.message); }
+  }catch(e){ alert(e.message); }
 }
 
 document.getElementById('new-profile').onclick=async()=>{
