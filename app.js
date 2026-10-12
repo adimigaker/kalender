@@ -15,14 +15,18 @@ async function sel(q){
   const k=getKey(); if(!k)throw new Error('no key');
   const s=q.includes('?')?'&':'?';
   const r=await fetch(SUPABASE_URL+q+s+'calendar_key=eq.'+encodeURIComponent(k)+'&deleted_at=is.null',{headers:{apikey:SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON}});
-  if(!r.ok)throw new Error(r.status);
+  if(!r.ok) throw new Error('LOAD:'+r.status);
   return r.json();
 }
 async function ins(t,obj){
   const k=getKey(); if(!k)throw new Error('no key');
   obj.calendar_key=k;
   const r=await fetch(SUPABASE_URL+'/rest/v1/'+t,{method:'POST',headers:authHeaders(),body:JSON.stringify(obj)});
-  if(!r.ok)throw new Error(await r.text());
+  if(!r.ok){
+    const txt=await r.text();
+    alert('Gagal simpan: '+txt);
+    throw new Error(txt);
+  }
   return r.json();
 }
 
@@ -52,16 +56,18 @@ async function load(){
     state.profiles=await sel('/rest/v1/cal_profiles?select=*');
     state.items=await sel('/rest/v1/cal_items?select=*');
     if(state.profiles.length===0){
-      const r=await ins('cal_profiles',{name:'Profil A (Jurnal Keseharian)'});
-      state.profiles=r; state.active=r[0].id;
+      try{
+        const r=await ins('cal_profiles',{name:'Profil A (Jurnal Keseharian)'});
+        state.profiles=r; state.active=r[0].id;
+      }catch(e){ console.error('auto-create',e); }
     }else if(!state.active){ state.active=state.profiles[0].id; }
     render();
-  }catch(e){console.error(e);}
+  }catch(e){ alert('Load gagal: '+e.message); }
 }
 
 document.getElementById('new-profile').onclick=async()=>{
   const name=prompt('Nama profil'); if(!name)return;
-  const r=await ins('cal_profiles',{name}); state.profiles.push(r[0]); state.active=r[0].id; render();
+  try{ const r=await ins('cal_profiles',{name}); state.profiles.push(r[0]); state.active=r[0].id; render(); }catch(e){}
 };
 document.getElementById('new-item').onclick=async()=>{
   if(!state.active){alert('Buat profil dulu');return;}
@@ -69,8 +75,7 @@ document.getElementById('new-item').onclick=async()=>{
   const desc=prompt('Deskripsi (opsional)')||null;
   const loc=prompt('Lokasi (opsional)')||null;
   const start=prompt('Waktu mulai ISO8601 (kosongkan kalau seharian)')||null;
-  const r=await ins('cal_items',{profile_id:state.active,title,description:desc,location:loc,start_at:start||null,all_day:start?false:true});
-  state.items.push(r[0]); render();
+  try{ const r=await ins('cal_items',{profile_id:state.active,title,description:desc,location:loc,start_at:start||null,all_day:start?false:true}); state.items.push(r[0]); render(); }catch(e){}
 };
 
 load(); setInterval(load,10000);
