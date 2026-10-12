@@ -1,5 +1,5 @@
 const SUPABASE_URL = 'https://eogdtpkiwzlarllnxsrj.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvZ2R0cGtpd3psYXJsbG54c3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODg0NzMsImV4cCI6MjA4OTY2NDQ3M30.eZPbYTuaDerKL9SOEa4ctkxSlU1PiEAU9l42czgYOyI';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvZ2R0cGtpd3psYXJsbG54c3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5NDEzNTksImV4cCI6MjA3NDUxNzM1OX0.5iQ8Az3LpGXpXW-GqMwf1u9B0U1-B3LGoS2aNRc4PpU';
 
 let state={profiles:[],items:[],active:null,key:'kalender'};
 
@@ -9,8 +9,10 @@ function authHeaders(){return {apikey:SUPABASE_ANON,'Authorization':'Bearer '+SU
 async function sel(q){
   const k=getKey();
   const s=q.includes('?')?'&':'?';
-  const r=await fetch(SUPABASE_URL+q+s+'calendar_key=eq.'+encodeURIComponent(k)+'&deleted_at=is.null',{headers:{apikey:SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON}});
-  if(!r.ok) throw new Error('ERR'+r.status);
+  let url=SUPABASE_URL+q+s+'calendar_key=eq.'+encodeURIComponent(k);
+  if(q.includes('cal_items')) url+='&deleted_at=is.null';
+  const r=await fetch(url,{headers:{apikey:SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON}});
+  if(!r.ok){ const t=await r.text(); alert('ERR'+r.status+':'+t); throw new Error('ERR'+r.status); }
   return r.json();
 }
 async function ins(t,obj){
@@ -50,7 +52,7 @@ async function load(){
       state.profiles=r; state.active=r[0].id;
     }else if(!state.active){ state.active=state.profiles[0].id; }
     render();
-  }catch(e){ alert(e.message); }
+  }catch(e){ console.error(e); }
 }
 
 document.getElementById('new-profile').onclick=async()=>{
