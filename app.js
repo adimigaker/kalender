@@ -47,14 +47,14 @@ function hijriOf(d,m,y){
 }
 
 function render(){
-  const head=document.getElementById('month');
+  const head=document.getElementById('big');
   const first=new Date(state.y,state.m,1), last=new Date(state.y,state.m+1,0);
   const now=new Date();
   const bln=hijriOf(1,state.m,state.y);
   const bln2=hijriOf(last.getDate(),state.m,state.y);
   let sub=BLN[state.m]+' '+state.y;
   if(bln) sub+=' / '+bln.d+' '+bln.m+' '+bln.y+' H';
-  head.innerHTML='<div class="big">'+BLN[state.m]+' '+state.y+'</div><div class="small">'+sub+'</div>';
+  head.textContent=BLN[state.m]+' '+state.y; subh.textContent=sub;
   const fd=(first.getDay()+6)%7; // Monday-first
   let html='<div class="dow">';
   ['SEN','SEL','RAB','KAM','JUM','SAB','MIN'].forEach((h,i)=>html+='<div class="d'+i+'">'+h+'</div>');
