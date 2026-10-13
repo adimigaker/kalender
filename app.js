@@ -1,6 +1,6 @@
 let state = {
-  y: 2026,
-  m: 9
+  y: new Date().getFullYear(),
+  m: new Date().getMonth()
 };
 
 let HOLIDAYS = {};
@@ -46,10 +46,12 @@ function getExactHijri(y, m, d, jdn) {
 
 async function loadHolidays() {
   try {
-    const res = await fetch('./holidays.json');
+    const res = await fetch('./holidays.json?v=' + Date.now());
     HOLIDAYS = await res.json();
-    render();
-  } catch(e) { console.error('Failed to load holidays'); render(); }
+  } catch(e) {
+    console.error('Failed to load holidays', e);
+  }
+  render();
 }
 
 function render() {
@@ -58,6 +60,8 @@ function render() {
   const cal = document.getElementById('cal');
   const holidayList = document.getElementById('holiday-list');
   
+  if (!head || !subh || !cal) return;
+
   const first = new Date(state.y, state.m, 1);
   const last = new Date(state.y, state.m + 1, 0);
   const now = new Date();
@@ -139,10 +143,13 @@ document.getElementById('today').onclick = goToday;
 
 // Swipe Gesture
 let touchStartX = 0;
-touchArea.addEventListener('touchstart', e => touchStartX = e.changedTouches[0].screenX, {passive:true});
-touchArea.addEventListener('touchend', e => {
-    let dx = e.changedTouches[0].screenX - touchStartX;
-    if (Math.abs(dx) > 40) dx < 0 ? nextMonth() : prevMonth();
-}, {passive:true});
+const touchArea = document.getElementById('touch-area');
+if (touchArea) {
+  touchArea.addEventListener('touchstart', e => touchStartX = e.changedTouches[0].screenX, {passive:true});
+  touchArea.addEventListener('touchend', e => {
+      let dx = e.changedTouches[0].screenX - touchStartX;
+      if (Math.abs(dx) > 40) dx < 0 ? nextMonth() : prevMonth();
+  }, {passive:true});
+}
 
 loadHolidays();
