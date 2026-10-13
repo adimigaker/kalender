@@ -3,31 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kalender Pribadi</title>
+<title>Kalender</title>
 <style>
-:root{--bg:#0f172a;--card:#1e293b;--text:#f8fafc;--sub:#94a3b8;--border:#334155;--blue:#60a5fa;--green:#34d399;--red:#f87171;--today-blue:#38bdf8}
-body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;margin:0;padding:12px;display:flex;flex-direction:column;align-items:center}
+:root{--bg:#0f172a;--card:#162032;--text:#e2e8f0;--sub:#94a3b8;--border:#334155;--blue:#60a5fa;--green:#34d399;--red:#f87171}
+body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui;margin:0;padding:12px;display:flex;flex-direction:column;align-items:center}
 .container{width:100%;max-width:480px}
-header{display:flex;flex-direction:column;align-items:center;padding:16px 0;border-bottom:1px solid var(--border);margin-bottom:12px;text-align:center}
-.big{font-size:1.6rem;font-weight:700;letter-spacing:-0.025em}
-.small{font-size:0.85rem;color:var(--sub);margin-top:4px}
-.nav-row{display:flex;gap:8px;margin-top:12px}
-.btn{padding:6px 14px;background:#334155;color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:0.85rem}
-.btn:active{background:#475569}
-.dow-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px;text-align:center;font-weight:700;font-size:0.75rem}
-.dow-0,.dow-1,.dow-2,.dow-3{color:var(--blue)}
-.dow-4,.dow-5{color:var(--green)}
-.dow-6{color:var(--red)}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
-.cell{background:var(--card);min-height:76px;border-radius:8px;position:relative;padding:6px 4px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;border:1px solid transparent}
-.cell.empty{background:transparent;border:none}
-.cell-top{display:flex;justify-content:space-between;width:100%;font-size:0.6rem;color:var(--sub)}
-.h-date{color:var(--blue);font-weight:600}
-.g-date{font-size:1.3rem;font-weight:800;color:var(--text);margin:2px 0}
-.j-date{font-size:0.6rem;color:var(--sub);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}
-.cell.today{border-color:var(--today-blue);background:#1e293b}
-.cell.today .g-date{color:var(--today-blue)}
-.cell.sunday .g-date{color:var(--red)}
+header{padding:1rem 0;border-bottom:1px solid var(--border);text-align:left}
+.big{font-size:1.5rem;font-weight:700}
+.small{font-size:.8rem;color:var(--sub);margin-top:4px}
+.nav{margin-top:10px;display:flex;gap:6px}
+.btn{padding:.4rem .8rem;background:#334155;color:white;border:none;border-radius:4px;font-weight:600;cursor:pointer}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);padding:.5rem 0;font-weight:600;font-size:.75rem;text-align:center}
+.d-blue{color:var(--blue)}
+.d-green{color:var(--green)}
+.d-red{color:var(--red)}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);border:1px solid var(--border)}
+.cell{background:var(--card);min-height:80px;position:relative;padding:5px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.cell.empty{background:var(--bg)}
+.g{font-size:1.2rem;font-weight:700}
+.h{position:absolute;top:3px;right:5px;font-size:.7rem;color:var(--blue);font-family:serif,system-ui}
+.p{font-size:.65rem;color:var(--sub);margin-top:2px}
+.today{outline:2px solid var(--blue);outline-offset:-2px;z-index:2}
+.sunday-cell .g{color:var(--red)}
 </style>
 </head>
 <body>
@@ -35,22 +32,13 @@ header{display:flex;flex-direction:column;align-items:center;padding:16px 0;bord
   <header>
     <div class="big" id="big">Oktober 2026</div>
     <div class="small" id="small">19 Rabiul Akhir 1448 H - 20 Jumadil Awal 1448 H</div>
-    <div class="nav-row">
-      <button class="btn" id="prev">← Bulan</button>
-      <button class="btn" id="today">Hari Ini</button>
-      <button class="btn" id="next">Bulan →</button>
+    <div class="nav">
+      <button class="btn" id="prev">←</button>
+      <button class="btn" id="today">Hari ini</button>
+      <button class="btn" id="next">→</button>
     </div>
   </header>
-  <div class="dow-grid">
-    <div class="dow-0">SEN</div>
-    <div class="dow-1">SEL</div>
-    <div class="dow-2">RAB</div>
-    <div class="dow-3">KAM</div>
-    <div class="dow-4">JUM</div>
-    <div class="dow-5">SAB</div>
-    <div class="dow-6">MIN</div>
-  </div>
-  <div class="cal-grid" id="cal"></div>
+  <div id="cal"></div>
 </div>
 <script src="app.js"></script>
 </body>

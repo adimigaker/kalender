@@ -1,8 +1,4 @@
-const SUPABASE_URL = 'https://eogdtpkiwzlarllnxsrj.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvZ2R0cGtpd3psYXJsbG54c3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk4MTk4NTYsImV4cCI6MjA2NTM5NTg1Nn0.2Y4WlM_Z1uDqFvPq3Ew6R8q9Yt3-8L4lK6x8Y3-4PpU';
-
 let state = {
-  key: 'kalender',
   y: 2026,
   m: 9 // Oktober (0-indexed)
 };
@@ -10,7 +6,11 @@ let state = {
 const BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const PASARAN = ['Wage', 'Kliwon', 'Legi', 'Pahing', 'Pon'];
 const HIJRI_MONTHS = ['','Muharram','Safar','Rabiul Awal','Rabiul Akhir','Jumadil Awal','Jumadil Akhir','Rajab','Sya\'ban','Ramadan','Syawal','Dzulqa\'dah','Dzulhijjah'];
-const JAWA_MONTHS = ['','Sura','Sapar','Mulud','Bakda Mulud','Jumadilawal','Jumadilakir','Rejeb','Ruwah','Pasa','Sawal','Dulkangidah','Besar'];
+
+function toArabicDigits(num) {
+  const digits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+  return num.toString().split('').map(d => digits[parseInt(d)] || d).join('');
+}
 
 function getJDN(y, m, d) {
   let a = Math.floor((14 - m) / 12);
@@ -45,18 +45,6 @@ function getExactHijri(y, m, d, jdn) {
   return { d: hd, m: hm, y: hy };
 }
 
-function getExactJawa(y, m, d, jdn) {
-  let ps = getPasaran(jdn);
-  if (y === 2026 && m === 10) {
-    if (d <= 12) {
-      return { d: 17 + d, m: 4, name: (17 + d) + ' ' + ps };
-    } else {
-      return { d: d - 12, m: 5, name: (d - 12) + ' ' + ps };
-    }
-  }
-  return { d: '', m: '', name: ps };
-}
-
 function render() {
   const head = document.getElementById('big');
   const subh = document.getElementById('small');
@@ -66,14 +54,21 @@ function render() {
   const last = new Date(state.y, state.m + 1, 0);
   const now = new Date();
 
-  head.textContent = BLN[state.m] + ' ' + state.y;
+  head.textContent = `${BLN[state.m]} ${state.y}`;
 
   let hjFirst = getExactHijri(state.y, state.m + 1, 1, getJDN(state.y, state.m + 1, 1));
   let hjLast = getExactHijri(state.y, state.m + 1, last.getDate(), getJDN(state.y, state.m + 1, last.getDate()));
   subh.textContent = `${hjFirst.d} ${HIJRI_MONTHS[hjFirst.m]} ${hjFirst.y} H - ${hjLast.d} ${HIJRI_MONTHS[hjLast.m]} ${hjLast.y} H`;
 
   let fd = (first.getDay() + 6) % 7;
-  let html = '';
+  let html = '<div class="dow">';
+  ['SEN','SEL','RAB','KAM','JUM','SAB','MIN'].forEach((h, i) => {
+    let cls = 'd-blue';
+    if (i >= 4) cls = 'd-green';
+    if (i === 6) cls = 'd-red';
+    html += `<div class="${cls}">${h}</div>`;
+  });
+  html += '</div><div class="grid">';
 
   for (let i = 0; i < fd; i++) {
     html += '<div class="cell empty"></div>';
@@ -83,25 +78,25 @@ function render() {
     let wd = (new Date(state.y, state.m, d).getDay() + 6) % 7;
     let jdn = getJDN(state.y, state.m + 1, d);
     let hj = getExactHijri(state.y, state.m + 1, d, jdn);
-    let jw = getExactJawa(state.y, state.m + 1, d, jdn);
+    let ps = getPasaran(jdn);
     let isToday = (now.getFullYear() === state.y && now.getMonth() === state.m && now.getDate() === d);
     let isSunday = (wd === 6);
 
     let cellCls = 'cell';
     if (isToday) cellCls += ' today';
-    if (isSunday) cellCls += ' sunday';
+    if (isSunday) cellCls += ' sunday-cell';
+
+    let hjArabic = toArabicDigits(hj.d);
 
     html += `
       <div class="${cellCls}">
-        <div class="cell-top">
-          <span></span>
-          <span class="h-date">${hj.d}</span>
-        </div>
-        <div class="g-date">${d}</div>
-        <div class="j-date">${jw.name}</div>
+        <div class="h">${hjArabic}</div>
+        <div class="g">${d}</div>
+        <div class="p">${ps}</div>
       </div>
     `;
   }
+  html += '</div>';
   cal.innerHTML = html;
 }
 
@@ -125,11 +120,3 @@ document.getElementById('today').onclick = () => {
 };
 
 render();
-
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(regs => {
-    for (let reg of regs) {
-      reg.unregister();
-    }
-  });
-}
