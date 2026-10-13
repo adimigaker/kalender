@@ -8,14 +8,14 @@
 :root{--bg:#0f172a;--card:#162032;--text:#e2e8f0;--sub:#94a3b8;--border:#334155;--blue:#60a5fa;--green:#34d399;--red:#f87171}
 body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui;margin:0;padding:12px;display:flex;flex-direction:column;align-items:center;user-select:none;-webkit-user-select:none}
 .container{width:100%;max-width:480px;touch-action:pan-y}
-header{padding:0.75rem 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
-.header-titles{display:flex;flex-direction:column}
-.big{font-size:1.4rem;font-weight:700}
-.small{font-size:.75rem;color:var(--sub);margin-top:2px}
-.nav-icons{display:flex;align-items:center;gap:6px}
-.btn-icon{background:#1e293b;border:1px solid var(--border);color:var(--text);border-radius:6px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;transition:background 0.15s}
-.btn-icon:active{background:var(--border)}
-.btn-icon svg{width:18px;height:18px;stroke:var(--text);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+header{padding:0.75rem 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.nav-btn{background:transparent;border:none;color:var(--text);cursor:pointer;padding:8px;display:flex;align-items:center;justify-content:center;border-radius:6px;transition:background 0.15s}
+.nav-btn:active{background:var(--border)}
+.nav-btn svg{width:20px;height:20px;stroke:var(--text);stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.header-center{display:flex;flex-direction:column;align-items:center;text-align:center;flex-grow:1;cursor:pointer}
+.header-center:active{opacity:0.8}
+.big{font-size:1.25rem;font-weight:700}
+.small{font-size:.7rem;color:var(--sub);margin-top:2px}
 .dow{display:grid;grid-template-columns:repeat(7,1fr);padding:.5rem 0;font-weight:600;font-size:.75rem;text-align:center}
 .d-blue{color:var(--blue)}
 .d-green{color:var(--green)}
@@ -33,21 +33,16 @@ header{padding:0.75rem 0;border-bottom:1px solid var(--border);display:flex;just
 <body>
 <div class="container" id="touch-area">
   <header>
-    <div class="header-titles">
+    <button class="nav-btn" id="prev" title="Bulan Sebelumnya">
+      <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+    </button>
+    <div class="header-center" id="today" title="Klik untuk ke Hari Ini">
       <div class="big" id="big">Oktober 2026</div>
       <div class="small" id="small">19 Rabiul Akhir 1448 H - 20 Jumadil Awal 1448 H</div>
     </div>
-    <div class="nav-icons">
-      <button class="btn-icon" id="prev" title="Bulan Sebelumnya">
-        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
-      </button>
-      <button class="btn-icon" id="today" title="Hari Ini">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="3" fill="currentColor"></circle></svg>
-      </button>
-      <button class="btn-icon" id="next" title="Bulan Berikutnya">
-        <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-      </button>
-    </div>
+    <button class="nav-btn" id="next" title="Bulan Berikutnya">
+      <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </button>
   </header>
   <div id="cal"></div>
 </div>
