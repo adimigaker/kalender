@@ -100,23 +100,60 @@ function render() {
   cal.innerHTML = html;
 }
 
-document.getElementById('prev').onclick = () => {
+function prevMonth() {
   state.m--;
   if (state.m < 0) { state.m = 11; state.y--; }
   render();
-};
+}
 
-document.getElementById('next').onclick = () => {
+function nextMonth() {
   state.m++;
   if (state.m > 11) { state.m = 0; state.y++; }
   render();
-};
+}
 
-document.getElementById('today').onclick = () => {
+function goToday() {
   const d = new Date();
   state.y = d.getFullYear();
   state.m = d.getMonth();
   render();
-};
+}
+
+document.getElementById('prev').onclick = prevMonth;
+document.getElementById('next').onclick = nextMonth;
+document.getElementById('today').onclick = goToday;
+
+// Swipe Gesture Detection
+let touchStartX = 0;
+let touchStartY = 0;
+let touchEndX = 0;
+let touchEndY = 0;
+
+const touchArea = document.getElementById('touch-area');
+
+touchArea.addEventListener('touchstart', e => {
+  touchStartX = e.changedTouches[0].screenX;
+  touchStartY = e.changedTouches[0].screenY;
+}, { passive: true });
+
+touchArea.addEventListener('touchend', e => {
+  touchEndX = e.changedTouches[0].screenX;
+  touchEndY = e.changedTouches[0].screenY;
+  handleSwipe();
+}, { passive: true });
+
+function handleSwipe() {
+  let dx = touchEndX - touchStartX;
+  let dy = touchEndY - touchStartY;
+  
+  // Ensure horizontal swipe is dominant and above threshold (40px)
+  if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+    if (dx < 0) {
+      nextMonth(); // Swipe left -> Next Month
+    } else {
+      prevMonth(); // Swipe right -> Prev Month
+    }
+  }
+}
 
 render();
