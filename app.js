@@ -70,10 +70,12 @@ function render() {
   });
   html += '</div><div class="grid">';
 
+  // Leading empty cells before 1st of month
   for (let i = 0; i < fd; i++) {
     html += '<div class="cell empty"></div>';
   }
 
+  // Days of month
   for (let d = 1; d <= last.getDate(); d++) {
     let wd = (new Date(state.y, state.m, d).getDay() + 6) % 7;
     let jdn = getJDN(state.y, state.m + 1, d);
@@ -96,6 +98,14 @@ function render() {
       </div>
     `;
   }
+
+  // Trailing empty cells after last day of month
+  let totalCells = fd + last.getDate();
+  let trailingEmpty = (7 - (totalCells % 7)) % 7;
+  for (let i = 0; i < trailingEmpty; i++) {
+    html += '<div class="cell empty"></div>';
+  }
+
   html += '</div>';
   cal.innerHTML = html;
 }
@@ -146,12 +156,11 @@ function handleSwipe() {
   let dx = touchEndX - touchStartX;
   let dy = touchEndY - touchStartY;
   
-  // Ensure horizontal swipe is dominant and above threshold (40px)
   if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) {
     if (dx < 0) {
-      nextMonth(); // Swipe left -> Next Month
+      nextMonth();
     } else {
-      prevMonth(); // Swipe right -> Prev Month
+      prevMonth();
     }
   }
 }
