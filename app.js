@@ -7,6 +7,14 @@ const BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus',
 const PASARAN = ['Wage', 'Kliwon', 'Legi', 'Pahing', 'Pon'];
 const HIJRI_MONTHS = ['','Muharram','Safar','Rabiul Awal','Rabiul Akhir','Jumadil Awal','Jumadil Akhir','Rajab','Sya\'ban','Ramadan','Syawal','Dzulqa\'dah','Dzulhijjah'];
 
+// Static National Holidays & Libur Nasional / Cuti Bersama database (YYYY-MM-DD -> description)
+const HOLIDAYS = {
+  '2026-12-24': 'Cuti Bersama',
+  '2026-12-25': 'Kelahiran Yesus Kristus (Natal)',
+  '2026-01-01': 'Tahun Baru Masehi',
+  '2026-08-17': 'Hari Kemerdekaan RI'
+};
+
 function toArabicDigits(num) {
   const digits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
   return num.toString().split('').map(d => digits[parseInt(d)] || d).join('');
@@ -49,6 +57,7 @@ function render() {
   const head = document.getElementById('big');
   const subh = document.getElementById('small');
   const cal = document.getElementById('cal');
+  const holidayList = document.getElementById('holiday-list');
   
   const first = new Date(state.y, state.m, 1);
   const last = new Date(state.y, state.m + 1, 0);
@@ -70,12 +79,12 @@ function render() {
   });
   html += '</div><div class="grid">';
 
-  // Leading empty cells before 1st of month
   for (let i = 0; i < fd; i++) {
     html += '<div class="cell empty"></div>';
   }
 
-  // Days of month
+  let monthHolidays = [];
+
   for (let d = 1; d <= last.getDate(); d++) {
     let wd = (new Date(state.y, state.m, d).getDay() + 6) % 7;
     let jdn = getJDN(state.y, state.m + 1, d);
@@ -84,9 +93,18 @@ function render() {
     let isToday = (now.getFullYear() === state.y && now.getMonth() === state.m && now.getDate() === d);
     let isSunday = (wd === 6);
 
+    let mm = String(state.m + 1).padStart(2, '0');
+    let dd = String(d).padStart(2, '0');
+    let dateKey = `${state.y}-${mm}-${dd}`;
+    let holidayDesc = HOLIDAYS[dateKey];
+
+    if (holidayDesc) {
+      monthHolidays.push({d, desc: holidayDesc});
+    }
+
     let cellCls = 'cell';
     if (isToday) cellCls += ' today';
-    if (isSunday) cellCls += ' sunday-cell';
+    if (isSunday || holidayDesc) cellCls += ' holiday-cell';
 
     let hjArabic = toArabicDigits(hj.d);
 
@@ -99,7 +117,6 @@ function render() {
     `;
   }
 
-  // Trailing empty cells after last day of month
   let totalCells = fd + last.getDate();
   let trailingEmpty = (7 - (totalCells % 7)) % 7;
   for (let i = 0; i < trailingEmpty; i++) {
@@ -108,6 +125,22 @@ function render() {
 
   html += '</div>';
   cal.innerHTML = html;
+
+  // Render holiday notes below calendar
+  if (holidayList) {
+    if (monthHolidays.length > 0) {
+      let hHtml = '<div class="holiday-title">Hari Libur / Cuti Bulan Ini:</div><ul>';
+      monthHolidays.forEach(h => {
+        hHtml += `<li><span class="h-date-text">${h.d} ${BLN[state.m]} ${state.y}</span>: ${h.desc}</li>`;
+      });
+      hHtml += '</ul>';
+      holidayList.innerHTML = hHtml;
+      holidayList.style.display = 'block';
+    } else {
+      holidayList.innerHTML = '';
+      holidayList.style.display = 'none';
+    }
+  }
 }
 
 function prevMonth() {
@@ -133,7 +166,6 @@ document.getElementById('prev').onclick = prevMonth;
 document.getElementById('next').onclick = nextMonth;
 document.getElementById('today').onclick = goToday;
 
-// Swipe Gesture Detection
 let touchStartX = 0;
 let touchStartY = 0;
 let touchEndX = 0;

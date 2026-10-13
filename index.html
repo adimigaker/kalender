@@ -27,7 +27,12 @@ header{padding:0.75rem 0;border-bottom:1px solid var(--border);display:flex;alig
 .h{position:absolute;top:3px;right:5px;font-size:.7rem;color:var(--blue);font-family:serif,system-ui}
 .p{font-size:.65rem;color:var(--sub);margin-top:2px}
 .today{outline:2px solid var(--blue);outline-offset:-2px;z-index:2}
-.sunday-cell .g{color:var(--red)}
+.holiday-cell .g{color:var(--red)}
+.holiday-notes{margin-top:16px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:0.8rem}
+.holiday-title{font-weight:700;margin-bottom:6px;color:var(--blue)}
+.holiday-notes ul{margin:0;padding-left:16px;color:var(--sub)}
+.holiday-notes li{margin-bottom:4px}
+.h-date-text{color:var(--text);font-weight:600}
 </style>
 </head>
 <body>
@@ -45,6 +50,7 @@ header{padding:0.75rem 0;border-bottom:1px solid var(--border);display:flex;alig
     </button>
   </header>
   <div id="cal"></div>
+  <div id="holiday-list" class="holiday-notes" style="display:none"></div>
 </div>
 <script src="app.js"></script>
 </body>
