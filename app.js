@@ -1,19 +1,13 @@
 let state = {
   y: 2026,
-  m: 9 // Oktober (0-indexed)
+  m: 9
 };
+
+let HOLIDAYS = {};
 
 const BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const PASARAN = ['Wage', 'Kliwon', 'Legi', 'Pahing', 'Pon'];
 const HIJRI_MONTHS = ['','Muharram','Safar','Rabiul Awal','Rabiul Akhir','Jumadil Awal','Jumadil Akhir','Rajab','Sya\'ban','Ramadan','Syawal','Dzulqa\'dah','Dzulhijjah'];
-
-// Static National Holidays & Libur Nasional / Cuti Bersama database (YYYY-MM-DD -> description)
-const HOLIDAYS = {
-  '2026-12-24': 'Cuti Bersama',
-  '2026-12-25': 'Kelahiran Yesus Kristus (Natal)',
-  '2026-01-01': 'Tahun Baru Masehi',
-  '2026-08-17': 'Hari Kemerdekaan RI'
-};
 
 function toArabicDigits(num) {
   const digits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
@@ -34,11 +28,8 @@ function getPasaran(jdn) {
 
 function getExactHijri(y, m, d, jdn) {
   if (y === 2026 && m === 10) {
-    if (d <= 11) {
-      return { d: 18 + d, m: 4, y: 1448 };
-    } else {
-      return { d: d - 11, m: 5, y: 1448 };
-    }
+    if (d <= 11) return { d: 18 + d, m: 4, y: 1448 };
+    else return { d: d - 11, m: 5, y: 1448 };
   }
   let days = jdn - 1948439;
   let hy = Math.floor((30 * days + 10646) / 10631);
@@ -51,6 +42,14 @@ function getExactHijri(y, m, d, jdn) {
   while (hm < 12 && mStart(hy, hm + 1) <= jdn) hm++;
   let hd = jdn - mStart(hy, hm) + 1;
   return { d: hd, m: hm, y: hy };
+}
+
+async function loadHolidays() {
+  try {
+    const res = await fetch('./holidays.json');
+    HOLIDAYS = await res.json();
+    render();
+  } catch(e) { console.error('Failed to load holidays'); render(); }
 }
 
 function render() {
@@ -79,9 +78,7 @@ function render() {
   });
   html += '</div><div class="grid">';
 
-  for (let i = 0; i < fd; i++) {
-    html += '<div class="cell empty"></div>';
-  }
+  for (let i = 0; i < fd; i++) html += '<div class="cell empty"></div>';
 
   let monthHolidays = [];
 
@@ -98,9 +95,7 @@ function render() {
     let dateKey = `${state.y}-${mm}-${dd}`;
     let holidayDesc = HOLIDAYS[dateKey];
 
-    if (holidayDesc) {
-      monthHolidays.push({d, desc: holidayDesc});
-    }
+    if (holidayDesc) monthHolidays.push({d, desc: holidayDesc});
 
     let cellCls = 'cell';
     if (isToday) cellCls += ' today';
@@ -108,30 +103,21 @@ function render() {
 
     let hjArabic = toArabicDigits(hj.d);
 
-    html += `
-      <div class="${cellCls}">
-        <div class="h">${hjArabic}</div>
-        <div class="g">${d}</div>
-        <div class="p">${ps}</div>
-      </div>
-    `;
+    html += `<div class="${cellCls}"><div class="h">${hjArabic}</div><div class="g">${d}</div><div class="p">${ps}</div></div>`;
   }
 
   let totalCells = fd + last.getDate();
   let trailingEmpty = (7 - (totalCells % 7)) % 7;
-  for (let i = 0; i < trailingEmpty; i++) {
-    html += '<div class="cell empty"></div>';
-  }
+  for (let i = 0; i < trailingEmpty; i++) html += '<div class="cell empty"></div>';
 
   html += '</div>';
   cal.innerHTML = html;
 
-  // Render holiday notes below calendar
   if (holidayList) {
     if (monthHolidays.length > 0) {
-      let hHtml = '<div class="holiday-title">Hari Libur / Cuti Bulan Ini:</div><ul>';
+      let hHtml = '<div class="holiday-title">Libur & Cuti:</div><ul>';
       monthHolidays.forEach(h => {
-        hHtml += `<li><span class="h-date-text">${h.d} ${BLN[state.m]} ${state.y}</span>: ${h.desc}</li>`;
+        hHtml += `<li><span class="h-date-text">${h.d} ${BLN[state.m]}</span>: ${h.desc}</li>`;
       });
       hHtml += '</ul>';
       holidayList.innerHTML = hHtml;
@@ -143,58 +129,20 @@ function render() {
   }
 }
 
-function prevMonth() {
-  state.m--;
-  if (state.m < 0) { state.m = 11; state.y--; }
-  render();
-}
-
-function nextMonth() {
-  state.m++;
-  if (state.m > 11) { state.m = 0; state.y++; }
-  render();
-}
-
-function goToday() {
-  const d = new Date();
-  state.y = d.getFullYear();
-  state.m = d.getMonth();
-  render();
-}
+function prevMonth() { state.m--; if(state.m < 0){state.m=11;state.y--;} render(); }
+function nextMonth() { state.m++; if(state.m > 11){state.m=0;state.y++;} render(); }
+function goToday() { const d=new Date(); state.y=d.getFullYear(); state.m=d.getMonth(); render(); }
 
 document.getElementById('prev').onclick = prevMonth;
 document.getElementById('next').onclick = nextMonth;
 document.getElementById('today').onclick = goToday;
 
+// Swipe Gesture
 let touchStartX = 0;
-let touchStartY = 0;
-let touchEndX = 0;
-let touchEndY = 0;
-
-const touchArea = document.getElementById('touch-area');
-
-touchArea.addEventListener('touchstart', e => {
-  touchStartX = e.changedTouches[0].screenX;
-  touchStartY = e.changedTouches[0].screenY;
-}, { passive: true });
-
+touchArea.addEventListener('touchstart', e => touchStartX = e.changedTouches[0].screenX, {passive:true});
 touchArea.addEventListener('touchend', e => {
-  touchEndX = e.changedTouches[0].screenX;
-  touchEndY = e.changedTouches[0].screenY;
-  handleSwipe();
-}, { passive: true });
+    let dx = e.changedTouches[0].screenX - touchStartX;
+    if (Math.abs(dx) > 40) dx < 0 ? nextMonth() : prevMonth();
+}, {passive:true});
 
-function handleSwipe() {
-  let dx = touchEndX - touchStartX;
-  let dy = touchEndY - touchStartY;
-  
-  if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) {
-    if (dx < 0) {
-      nextMonth();
-    } else {
-      prevMonth();
-    }
-  }
-}
-
-render();
+loadHolidays();
