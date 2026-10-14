@@ -1,3 +1,4 @@
+/* Kalender v19 - 2026 Hijri sync fix */
 let state = {
   y: new Date().getFullYear(),
   m: new Date().getMonth()
@@ -27,21 +28,73 @@ function getPasaran(jdn) {
 }
 
 function getExactHijri(y, m, d, jdn) {
-  if (y === 2026 && m === 10) {
-    if (d <= 11) return { d: 18 + d, m: 4, y: 1448 };
-    else return { d: d - 11, m: 5, y: 1448 };
+  // 2026 Hijri calendar data (authoritative user-provided)
+  // Authoritative user-provided data for 2026; do NOT invent for other years
+  // For 2027+, fetch from credible external source (e.g., Umm al-Qura / official hijri-date npm lib)
+  // If source unavailable, ask user to provide data — do NOT guess
+  if (y !== 2026) {
+    // Fallback to algorithmic for non-2026
+    let days = jdn - 1948439;
+    let hy = Math.floor((30 * days + 10646) / 10631);
+    function mStart(yr, mo) {
+      return 1948439 + (yr - 1) * 354 + Math.floor((3 + 11 * yr) / 30) + Math.round(29.5001 * (mo - 1)) + Math.floor((mo - 1) / 2);
+    }
+    while (mStart(hy + 1, 1) <= jdn) hy++;
+    while (mStart(hy, 1) > jdn) hy--;
+    let hm = 1;
+    while (hm < 12 && mStart(hy, hm + 1) <= jdn) hm++;
+    let hd = jdn - mStart(hy, hm) + 1;
+    return { d: hd, m: hm, y: hy };
   }
-  let days = jdn - 1948439;
-  let hy = Math.floor((30 * days + 10646) / 10631);
-  function mStart(yr, mo) {
-    return 1948439 + (yr - 1) * 354 + Math.floor((3 + 11 * yr) / 30) + Math.round(29.5001 * (mo - 1)) + Math.floor((mo - 1) / 2);
+
+  // Day-of-year for 2026 (non-leap)
+  const monthDays = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+  const doy = monthDays[m - 1] + d; // 1-based
+
+  // User-provided 2026 month boundaries (first day of each Gregorian month)
+  // Source: authoritative user data + screenshot verification (November 2026)
+  // Month codes: 1=Muharram 2=Safar 3=Rabiulawal 4=Rabiulakhir 5=Jumadilawal 6=Jumadilakhir 7=Rajab 8=Syakban 9=Ramadan 10=Syawal 11=Zulkaiddah 12=Zulhijjah
+  const hijriStart = [
+    { doy: 1,    h: 12, m: 7,  y: 1447 }, // Jan 01
+    { doy: 32,   h: 13, m: 8,  y: 1447 }, // Feb 01
+    { doy: 60,   h: 11, m: 9,  y: 1447 }, // Mar 01
+    { doy: 91,   h: 12, m: 10, y: 1447 }, // Apr 01
+    { doy: 121,  h: 13, m: 11, y: 1447 }, // May 01
+    { doy: 152,  h: 15, m: 12, y: 1447 }, // Jun 01
+    { doy: 182,  h: 16, m: 1,  y: 1448 }, // Jul 01
+    { doy: 213,  h: 17, m: 2,  y: 1448 }, // Aug 01
+    { doy: 244,  h: 19, m: 3,  y: 1448 }, // Sep 01
+    { doy: 274,  h: 18, m: 4,  y: 1448 }, // Oct 01: 18 Rabiulakhir 1448
+    { doy: 305,  h: 19, m: 5,  y: 1448 }, // Nov 01: 19 Jumadil Awal (screenshot verified)
+    { doy: 335,  h: 19, m: 6,  y: 1448 }, // Dec 01: 19 Jumadil Akhir (calculated from Nov 30 = 18)
+    { doy: 366,  h: 20, m: 7,  y: 1448 }, // Jan 01, 2027: 20 Rajab 1448 (calculated from Dec 31 = 19 Jumadil Akhir + 1)
+  ];
+
+  // Find the segment
+  for (let i = 0; i < hijriStart.length - 1; i++) {
+    if (doy >= hijriStart[i].doy && doy < hijriStart[i + 1].doy) {
+      let start = hijriStart[i];
+      let offset = doy - start.doy;
+      let hd = start.h + offset;
+      let hm = start.m;
+      let hy = start.y;
+
+      // Hijri month lengths for 1447-1448 (authoritative)
+      const hijriMonthLen = {
+        1447: { 7: 30, 8: 30, 9: 29, 10: 30, 11: 29, 12: 30 },
+        1448: { 1: 30, 2: 29, 3: 30, 4: 29, 5: 30, 6: 29, 7: 30 }
+      };
+
+      while (hd > (hijriMonthLen[hy]?.[hm] || 30)) {
+        hd -= (hijriMonthLen[hy]?.[hm] || 30);
+        hm++;
+        if (hm > 12) { hm = 1; hy++; }
+      }
+      return { d: hd, m: hm, y: hy };
+    }
   }
-  while (mStart(hy + 1, 1) <= jdn) hy++;
-  while (mStart(hy, 1) > jdn) hy--;
-  let hm = 1;
-  while (hm < 12 && mStart(hy, hm + 1) <= jdn) hm++;
-  let hd = jdn - mStart(hy, hm) + 1;
-  return { d: hd, m: hm, y: hy };
+  // Fallback (should not reach)
+  return { d: 1, m: 1, y: 1447 };
 }
 
 async function loadHolidays() {
@@ -107,7 +160,7 @@ function render() {
 
     let hjArabic = toArabicDigits(hj.d);
 
-    html += `<div class="${cellCls}"><div class="h">${hjArabic}</div><div class="g">${d}</div><div class="p">${ps}</div></div>`;
+    html += `<div class="${cellCls}"><div class="h">${hjArabic}</div><div class="day-wrap"><div class="g">${d}</div><div class="p">${ps}</div></div></div>`;
   }
 
   let totalCells = fd + last.getDate();

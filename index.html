@@ -7,7 +7,7 @@
 <style>
 :root{--bg:#0f172a;--card:#162032;--text:#e2e8f0;--sub:#94a3b8;--border:#334155;--blue:#60a5fa;--green:#34d399;--red:#f87171}
 body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui;margin:0;padding:12px;display:flex;flex-direction:column;align-items:center;user-select:none;-webkit-user-select:none}
-.container{width:100%;max-width:480px;touch-action:pan-y}
+.container{width:100%;max-width:450px;touch-action:pan-y}
 header{padding:0.75rem 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px}
 .nav-btn{background:transparent;border:none;color:var(--text);cursor:pointer;padding:8px;display:flex;align-items:center;justify-content:center;border-radius:6px;transition:background 0.15s}
 .nav-btn:active{background:var(--border)}
@@ -20,12 +20,13 @@ header{padding:0.75rem 0;border-bottom:1px solid var(--border);display:flex;alig
 .d-blue{color:var(--blue)}
 .d-green{color:var(--green)}
 .d-red{color:var(--red)}
-.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);border:1px solid var(--border);touch-action:pan-y}
-.cell{background:var(--card);min-height:76px;position:relative;padding:5px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:0.25px;background:var(--border);border:1px solid var(--border);touch-action:pan-y}
+.cell{background:var(--card);aspect-ratio:1/1;min-height:0;position:relative;padding:1px;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .cell.empty{background:var(--bg)}
-.g{font-size:1.15rem;font-weight:700}
+.g{font-size:1.05rem;font-weight:700;line-height:1.1}
 .h{position:absolute;top:3px;right:5px;font-size:.7rem;color:var(--blue);font-family:serif,system-ui}
-.p{font-size:.65rem;color:var(--sub);margin-top:2px}
+.day-wrap{display:flex;flex-direction:column;align-items:center;gap:0;justify-content:flex-start}
+.p{font-size:.6rem;color:var(--sub);margin-top:1px;line-height:1.1}
 .today{outline:2px solid var(--blue);outline-offset:-2px;z-index:2}
 .holiday-cell .g{color:var(--red)}
 .holiday-notes{margin-top:16px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:0.8rem}
@@ -49,9 +50,10 @@ header{padding:0.75rem 0;border-bottom:1px solid var(--border);display:flex;alig
       <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
     </button>
   </header>
-  <div id="cal"></div>
-  <div id="holiday-list" class="holiday-notes" style="display:none"></div>
+  <footer style="text-align:center;padding:16px 0;font-size:.7rem;color:var(--sub)">Kalender v19</footer>
+<div id="cal"></div>
+<div id="holiday-list" class="holiday-notes" style="display:none"></div>
 </div>
-<script src="app.js"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>
