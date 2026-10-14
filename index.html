@@ -1,27 +1,23 @@
+<!-- Kalender v20 - Clean rebuild -->
 <!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kalender</title>
+<title>Kalender v20</title>
 <style>
 :root{--bg:#0f172a;--card:#162032;--text:#e2e8f0;--sub:#94a3b8;--border:#334155;--blue:#60a5fa;--green:#34d399;--red:#f87171}
 body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui;margin:0;padding:12px;display:flex;flex-direction:column;align-items:center;user-select:none;-webkit-user-select:none}
 .container{width:100%;max-width:450px;touch-action:pan-y}
 header{padding:0.75rem 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px}
 .nav-btn{background:transparent;border:none;color:var(--text);cursor:pointer;padding:8px;display:flex;align-items:center;justify-content:center;border-radius:6px;transition:background 0.15s}
-.nav-btn:active{background:var(--border)}
-.nav-btn svg{width:20px;height:20px;stroke:var(--text);stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .header-center{display:flex;flex-direction:column;align-items:center;text-align:center;flex-grow:1;cursor:pointer}
-.header-center:active{opacity:0.8}
 .big{font-size:1.25rem;font-weight:700}
 .small{font-size:.7rem;color:var(--sub);margin-top:2px}
 .dow{display:grid;grid-template-columns:repeat(7,1fr);padding:.5rem 0;font-weight:600;font-size:.75rem;text-align:center}
-.d-blue{color:var(--blue)}
-.d-green{color:var(--green)}
-.d-red{color:var(--red)}
+.d-blue{color:var(--blue)}.d-green{color:var(--green)}.d-red{color:var(--red)}
 .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:0.25px;background:var(--border);border:1px solid var(--border);touch-action:pan-y}
-.cell{background:var(--card);aspect-ratio:1/1;min-height:0;position:relative;padding:1px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.cell{background:var(--card);aspect-ratio:1/1;min-height:0;padding:1px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .cell.empty{background:var(--bg)}
 .g{font-size:1.05rem;font-weight:700;line-height:1.1}
 .h{position:absolute;top:3px;right:5px;font-size:.7rem;color:var(--blue);font-family:serif,system-ui}
@@ -39,21 +35,62 @@ header{padding:0.75rem 0;border-bottom:1px solid var(--border);display:flex;alig
 <body>
 <div class="container" id="touch-area">
   <header>
-    <button class="nav-btn" id="prev" title="Bulan Sebelumnya">
-      <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
-    </button>
-    <div class="header-center" id="today" title="Klik untuk ke Hari Ini">
-      <div class="big" id="big">Oktober 2026</div>
-      <div class="small" id="small">19 Rabiul Akhir 1448 H - 20 Jumadil Awal 1448 H</div>
-    </div>
-    <button class="nav-btn" id="next" title="Bulan Berikutnya">
-      <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-    </button>
+    <button class="nav-btn" id="prev" title="Bulan Sebelumnya"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+    <div class="header-center" id="today"><div class="big" id="big">Oktober 2026</div><div class="small" id="small">18 Rabiul Akhir 1448 H - 19 Jumadil Awal 1448 H</div></div>
+    <button class="nav-btn" id="next" title="Bulan Berikutnya"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
   </header>
-  <footer style="text-align:center;padding:16px 0;font-size:.7rem;color:var(--sub)">Kalender v19</footer>
-<div id="cal"></div>
-<div id="holiday-list" class="holiday-notes" style="display:none"></div>
+  <div class="dow"><div class="d-blue">SEN</div><div class="d-blue">SEL</div><div class="d-blue">RAB</div><div class="d-blue">KAM</div><div class="d-green">JUM</div><div class="d-green">SAB</div><div class="d-red">MIN</div></div>
+  <div class="grid" id="cal"></div>
+  <div id="holiday-list" class="holiday-notes" style="display:none"></div>
+  <footer style="text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-top:1px solid var(--border);margin-top:8px">Kalender v20</footer>
 </div>
-<script src="app.js?v=19"></script>
+
+<!-- Hijri data source: authoritative user data + Google Calendar reference (2026) -->
+<script>
+const HIJRI_2026 = {
+  // Month-start mapping: doy -> {h, m, y}
+  // Based on user data + screenshot verification (Nov 2026 = 19 Jumadil Awal)
+  1:  {h:12, m:7, y:1447},  // Jan exit=12 Rajab
+  32: {h:13, m:8, y:1447},  // Feb exit=13 Syakban
+  60: {h:11, m:9, y:1447},  // Mar exit=11 Ramadan
+  91: {h:12, m:10,y:1447},  // Apr exit=12 Syawal
+ 121: {h:13, m:11,y:1447},  // May exit=13 Zulkaiddah
+ 152: {h:15, m:12,y:1447},  // Jun exit=15 Zulhijjah
+ 182: {h:16, m:1, y:1448},  // Jul exit=16 Muharam
+ 213: {h:17, m:2, y:1448},  // Aug exit=17 Safar
+ 244: {h:19, m:3, y:1448},  // Sep exit=19 Rabiulawal
+ 274: {h:18, m:4, y:1448},  // Oct exit=18 Rabiulakhir (user fix)
+ 305: {h:19, m:5, y:1448},  // Nov exit=19 Jumadilawal (screenshot)
+ 335: {h:19, m:6, y:1448},  // Dec exit=19 Jumadilakhir
+};
+const MONTH_LEN = {1447:{7:30,8:30,9:29,10:30,11:29,12:30},1448:{1:30,2:29,3:30,4:29,5:30,6:29,7:30}};
+function getHijri(doy) { // doy 1..366 for 2026
+  const starts = Object.entries(HIJRI_2026).map(([k,v])=>({d:parseInt(k),...v})).sort((a,b)=>a.d-b.d);
+  for(let i=starts.length-1;i>=0;i--) if(doy>=starts[i].d) {
+    let h=starts[i].h, m=starts[i].m, y=starts[i].y, off=doy-starts[i].d;
+    while(off>0) { const len=MONTH_LEN[y]?.[m]||30; if(off>=len) { off-=len; m++; if(m>12){m=1;y++;} } else { h+=off; off=0; } }
+    if(h>len) { h-=len; m++; if(m>12){m=1;y++;} }
+    return {d:h, m:m, y:y};
+  }
+  return {d:1,m:1,y:1447};
+}
+// Build grid for Oct 2026 (month=9, 0-based) as demo
+const first = new Date(2026,9,1);
+const last = new Date(2026,10,0);
+let html='<div class="dow">';
+['SEN','SEL','RAB','KAM','JUM','SAB','MIN'].forEach((h,i)=>{let cls='d-blue';if(i>=4)cls='d-green';if(i===6)cls='d-red';html+=`<div class="${cls}">${h}</div>`;});
+html+='</div><div class="grid">';
+let fd=(first.getDay()+6)%7;
+for(let i=0;i<fd;i++) html+='<div class="cell empty"></div>';
+for(let d=1;d<=last.getDate();d++){
+  const wd=(new Date(2026,9,d).getDay()+6)%7;
+  const hj=getHijri(274+d-1); // Oct 1 = doy 274
+  const hjA=''+hj.d; const ps=['Wage','Kliwon','Legi','Pahing','Pon'][ (getJDN(2026,10,d)+1)%5 ];
+  html+=`<div class="cell"><div class="h">${hjA}</div><div class="day-wrap"><div class="g">${d}</div><div class="p">${ps}</div></div></div>`;
+}
+html+='</div>';
+document.getElementById('cal').innerHTML=html;
+function getJDN(y,m,d){let a=Math.floor((14-m)/12);let y2=y+4800-a;let m2=m+12*a-3;return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045;}
+</script>
 </body>
 </html>
