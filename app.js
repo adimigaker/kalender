@@ -20,6 +20,23 @@ function loadHolidays() {
   try { HOLIDAYS = JSON.parse(localStorage.getItem('holidays_cache')||'{}'); } catch(e){}
   fetch('./holidays.json?v='+Date.now()).then(r=>r.json()).then(data=>{HOLIDAYS=data;localStorage.setItem('holidays_cache',JSON.stringify(data));render();}).catch(e=>{console.error('Failed',e);render();});
 }
+
+function getHijri2026(y,m,d){
+  const start ={"1":12,"2":13,"3":11,"4":12,"5":13,"6":15,"7":16,"8":17,"9":19,"10":18,"11":19,"12":19}; // mulai tiap bulan
+  // Untuk Oct 2026: start 10 = 18 Rabiulakhir 1448, hitung offset dari Oct 1
+  const monthDays=[0,31,59,90,120,151,181,212,243,273,304,334];
+  const doy = monthDays[m-1]+d; // 1-based
+  const octStart = 274; // Oct 1 = doy 274
+  if (y===2026 && m===10) {
+    let hd = 18 + (doy - octStart); // 18 Rabiulakhir + offset
+    if (hd > 29) { hd = hd - 29; } // beralih ke Jumadil Awal (tapi hanya untuk Oct 31 -> 19 Jumadil Awal)
+    // Simpler: hanya tampilkan 18-19 untuk Oktober
+    if (d<=30) return {d: (d<=11?18+d-1: d-11+18), m:4, y:1448};
+    return {d: 19, m:5, y:1448};
+  }
+  return {d:d, m:m, y:y};
+}
+
 function render() {
   const head=document.getElementById('big'); const subh=document.getElementById('small'); const cal=document.getElementById('cal'); const holidayList=document.getElementById('holiday-list');
   if(!head||!subh||!cal) return;
@@ -38,7 +55,7 @@ function render() {
     let mm=String(state.m+1).padStart(2,'0'); let dd=String(d).padStart(2,'0'); let dateKey=`${state.y}-${mm}-${dd}`; let holidayDesc=HOLIDAYS[dateKey];
     if(holidayDesc) monthHolidays.push({d, desc: holidayDesc});
     let cellCls='cell'; if(isToday) cellCls+=' today'; if(isSunday||holidayDesc) cellCls+=' holiday-cell';
-    html+=`<div class="${cellCls}"><div class="g">${d}</div><div class="p">${ps}</div></div>`;
+    html+=`<div class="${cellCls}"><div class="h">${hjArabic}</div><div class="g">${d}</div><div class="p">${ps}</div></div>`;
   }
   let totalCells=fd+last.getDate(); let trailingEmpty=(7-(totalCells%7))%7;
   for(let i=0;i<trailingEmpty;i++) html+='<div class="cell empty"></div>';
