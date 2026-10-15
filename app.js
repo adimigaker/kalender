@@ -16,9 +16,9 @@ function getPasaran(jdn) {
   let idx = ((jdn + 2) % 5 + 5) % 5;
   return PASARAN[idx];
 }
-async function loadHolidays() {
-  try { HOLIDAYS = await fetch('./holidays.json?v='+Date.now()).then(r=>r.json()); } catch(e){ console.error('Failed',e); }
-  render();
+function loadHolidays() {
+  try { HOLIDAYS = JSON.parse(localStorage.getItem('holidays_cache')||'{}'); } catch(e){}
+  fetch('./holidays.json?v='+Date.now()).then(r=>r.json()).then(data=>{HOLIDAYS=data;localStorage.setItem('holidays_cache',JSON.stringify(data));render();}).catch(e=>{console.error('Failed',e);render();});
 }
 function render() {
   const head=document.getElementById('big'); const subh=document.getElementById('small'); const cal=document.getElementById('cal'); const holidayList=document.getElementById('holiday-list');
