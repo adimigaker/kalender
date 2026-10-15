@@ -1,6 +1,10 @@
-/* Kalender v23 - Masehi + Hijriyah (Intl + koreksi Kemenag) + Pasaran + Libur */
+/* Kalender v24 - Masehi + Hijriyah (Intl + koreksi Kemenag) + Pasaran + Libur (Google Calendar + manual) */
 let state = { y: new Date().getFullYear(), m: new Date().getMonth() };
-let HOLIDAYS = {};
+let HOLIDAYS = {};   // manual dari holidays.json (koreksi / tambahan, menang atas Google)
+let GHOL = {};       // otomatis dari Google Calendar
+const GCAL_KEY = 'AIzaSyC1l9UXl2evZOf4ZSZMEVeZwfZ4mFK6EW0';
+const GCAL_ID = 'id.indonesian#holiday@group.v.calendar.google.com';
+const gcalLoaded = new Set();
 let HIJRI_START = []; // koreksi awal bulan Kemenag: [{jdn, y, m}], urut naik
 
 const BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
@@ -81,6 +85,45 @@ function loadData() {
   k.live.then(d => { HIJRI_START = parseHijriData(d); render(); }).catch(e => console.error('hijri gagal', e));
 }
 
+
+/* ---------- LIBUR DARI GOOGLE CALENDAR ---------- */
+function dateKeyOf(t) {
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+}
+
+function parseGcal(items) {
+  const out = {};
+  for (const ev of items || []) {
+    if (!ev.start || !ev.start.date) continue; // hanya event sehari penuh
+    const end = new Date(ev.end.date + 'T00:00:00'); // end.date eksklusif
+    for (let t = new Date(ev.start.date + 'T00:00:00'); t < end; t = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1)) {
+      out[dateKeyOf(t)] = ev.summary;
+    }
+  }
+  return out;
+}
+
+async function loadGcalYear(y) {
+  if (!GCAL_KEY || GCAL_KEY.startsWith('ISI') || gcalLoaded.has(y)) return;
+  gcalLoaded.add(y);
+  const ck = 'gcal_' + y;
+  try { const c = localStorage.getItem(ck); if (c) { Object.assign(GHOL, JSON.parse(c)); render(); } } catch (e) {}
+  try {
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(GCAL_ID)}/events` +
+      `?key=${GCAL_KEY}&singleEvents=true&orderBy=startTime&maxResults=250` +
+      `&timeMin=${y}-01-01T00:00:00Z&timeMax=${y + 1}-01-01T00:00:00Z`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const out = parseGcal((await r.json()).items);
+    Object.assign(GHOL, out);
+    try { localStorage.setItem(ck, JSON.stringify(out)); } catch (e) {}
+    render();
+  } catch (e) {
+    gcalLoaded.delete(y); // boleh dicoba lagi saat ganti bulan
+    console.error('Google Calendar gagal', e);
+  }
+}
+
 /* ---------- RENDER ---------- */
 function render() {
   const head = document.getElementById('big');
@@ -88,6 +131,7 @@ function render() {
   const cal = document.getElementById('cal');
   const holidayList = document.getElementById('holiday-list');
   if (!head || !subh || !cal) return;
+  loadGcalYear(state.y);
 
   const first = new Date(state.y, state.m, 1);
   const last = new Date(state.y, state.m + 1, 0);
@@ -120,7 +164,7 @@ function render() {
     const ps = getPasaran(jdn);
     const isToday = now.getFullYear() === state.y && now.getMonth() === state.m && now.getDate() === d;
     const dateKey = `${state.y}-${String(state.m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    const holidayDesc = HOLIDAYS[dateKey];
+    const holidayDesc = HOLIDAYS[dateKey] || GHOL[dateKey];
     if (holidayDesc) monthHolidays.push({ d, desc: holidayDesc });
 
     let cellCls = 'cell';
