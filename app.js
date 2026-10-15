@@ -24,7 +24,7 @@ function render() {
   const head=document.getElementById('big'); const subh=document.getElementById('small'); const cal=document.getElementById('cal'); const holidayList=document.getElementById('holiday-list');
   if(!head||!subh||!cal) return;
   head.textContent=`${BLN[state.m]} ${state.y}`;
-  subh.textContent=`Masehi`;
+  subh.textContent=`Masehi • ٤ جُمَادَى الْأَوَّل ١٤٤٨ H (Kemenag)`;
   const first=new Date(state.y,state.m,1); const last=new Date(state.y,state.m+1,0); const now=new Date();
   let fd=(first.getDay()+6)%7;
   let html='<div class="dow">';
