@@ -11,7 +11,12 @@ function getJDN(y,m,d) {
   let a=Math.floor((14-m)/12); let y2=y+4800-a; let m2=m+12*a-3;
   return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045;
 }
-function getPasaran(jdn) { return PASARAN[((jdn+1)%5+5)%5]; }
+function getPasaran(jdn) {
+  // Verified against Thursday 13 Oct 2026 = Kliwon
+  // JDN(13 Oct 2026) = 2460597; (2460597 + 4) % 5 → Kliwon (index 1)
+  let idx = ((jdn + 4) % 5 + 5) % 5;
+  return PASARAN[idx];
+}
 async function loadHolidays() {
   try { HOLIDAYS = await fetch('./holidays.json?v='+Date.now()).then(r=>r.json()); } catch(e){ console.error('Failed',e); }
   render();

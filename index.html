@@ -14,7 +14,7 @@ header{padding:0.75rem 0;border-bottom:1px solid var(--border);display:flex;alig
 .dow{display:grid;grid-template-columns:repeat(7,1fr);padding:.5rem 0;font-weight:600;font-size:.75rem;text-align:center}
 .d-blue{color:var(--blue)}.d-green{color:var(--green)}.d-red{color:var(--red)}
 .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:0.25px;background:var(--border);border:1px solid var(--border);touch-action:pan-y}
-.cell{background:var(--card);aspect-ratio:1/1;min-height:0;padding:1px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.cell{background:var(--card);aspect-ratio:1/1;min-height:0;padding:1px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;font-size:0.75rem;}
 .cell.empty{background:var(--bg)}
 .g{font-size:1.05rem;font-weight:700;line-height:1.1}
 .p{font-size:.6rem;color:var(--sub);margin-top:1px;line-height:1.1}
@@ -38,6 +38,6 @@ header{padding:0.75rem 0;border-bottom:1px solid var(--border);display:flex;alig
 <div id="holiday-list" class="holiday-notes" style="display:none"></div>
 <footer style="text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-top:1px solid var(--border);margin-top:8px">Kalender v21 — Masehi + Pasaran + Libur Nasional</footer>
 </div>
-<script src="app.js?v=21"></script>
+<script src="app.js"></script>
 </body>
 </html>
