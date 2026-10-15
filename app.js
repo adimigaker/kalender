@@ -50,7 +50,7 @@ function render() {
   for(let i=0;i<fd;i++) html+='<div class="cell empty"></div>';
   let monthHolidays=[];
   for(let d=1;d<=last.getDate();d++){
-    let wd=(new Date(state.y,state.m,d).getDay()+6)%7; let jdn=getJDN(state.y,state.m+1,d); let ps=getPasaran(jdn);
+    let wd=(new Date(state.y,state.m,d).getDay()+6)%7; let jdn=getJDN(state.y,state.m+1,d); let ps=getPasaran(jdn); let hj=getHijri2026(state.y,state.m+1,d); let hjArabic=toArabicDigits(hj.d);
     let isToday=(now.getFullYear()===state.y&&now.getMonth()===state.m&&now.getDate()===d); let isSunday=(wd===6);
     let mm=String(state.m+1).padStart(2,'0'); let dd=String(d).padStart(2,'0'); let dateKey=`${state.y}-${mm}-${dd}`; let holidayDesc=HOLIDAYS[dateKey];
     if(holidayDesc) monthHolidays.push({d, desc: holidayDesc});
