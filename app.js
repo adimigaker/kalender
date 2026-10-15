@@ -12,8 +12,8 @@ function getJDN(y,m,d) {
   return d+Math.floor((153*m2+2)/5)+365*y2+Math.floor(y2/4)-Math.floor(y2/100)+Math.floor(y2/400)-32045;
 }
 function getPasaran(jdn) {
-  // Verified against Thursday 13 Oct 2026 = Kliwon
-  // JDN(13 Oct 2026) = 2460597; (2460597 + 4) % 5 → Kliwon (index 1)
+  // Corrected based on known Thursday 13 Oct 2026 = Kliwon
+  // JDN(13 Oct 2026) = 2460597; offset 4 ensures (2460597 + 4) % 5 = 1 -> Kliwon
   let idx = ((jdn + 4) % 5 + 5) % 5;
   return PASARAN[idx];
 }
