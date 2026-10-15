@@ -52,3 +52,5 @@ document.getElementById('prev').onclick=prevMonth; document.getElementById('next
 let touchStartX=0; const touchArea=document.getElementById('touch-area');
 if(touchArea){ touchArea.addEventListener('touchstart',e=>touchStartX=e.changedTouches[0].screenX,{passive:true}); touchArea.addEventListener('touchend',e=>{ let dx=e.changedTouches[0].screenX-touchStartX; if(Math.abs(dx)>40) dx<0?nextMonth():prevMonth(); },{passive:true}); }
 loadHolidays();
+
+window.addEventListener('load', function(){loadHolidays(); setTimeout(render,50);});
