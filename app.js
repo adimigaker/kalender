@@ -1,13 +1,13 @@
-/* Kalender Canvas v22 - Masehi + Hijriyah (Intl + Kemenag) + Pasaran + Libur + Canvas Multi-Profil */
+/* Kalender Canvas v23 - Supabase Real-time Sync & Multi-Profile Canvas */
 
 let state = { y: new Date().getFullYear(), m: new Date().getMonth() };
-let selectedDateKey = null; // tanggal yang sedang dibuka di modal catatan
-let HOLIDAYS = {};   // manual dari holidays.json (koreksi / tambahan, menang atas Google)
-let GHOL = {};       // otomatis dari Google Calendar
+let selectedDateKey = null; 
+let HOLIDAYS = {};   
+let GHOL = {};       
 const GCAL_KEY = '«redacted:AIza…»';
 const GCAL_ID = 'id.indonesian#holiday@group.v.calendar.google.com';
 const gcalLoaded = new Set();
-let HIJRI_START = []; // koreksi awal bulan Kemenag: [{jdn, y, m}], urut naik
+let HIJRI_START = []; 
 
 const BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const HARI = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
@@ -15,19 +15,23 @@ const PASARAN = ['Wage','Kliwon','Legi','Pahing','Pon'];
 const HIJRI_MONTHS = ['','Muharram','Safar','Rabiul Awal','Rabiul Akhir','Jumadil Awal','Jumadil Akhir','Rajab','Syaban','Ramadan','Syawal','Dzulqa\'dah','Dzulhijjah'];
 
 const PALETTES = [
-  '#60a5fa', // Blue
-  '#34d399', // Emerald
-  '#a78bfa', // Purple / Violet
-  '#fbbf24', // Amber
-  '#f43f5e', // Rose
-  '#22d3ee', // Cyan
-  '#fb7185', // Pink
-  '#f97316'  // Orange
+  '#60a5fa', '#34d399', '#a78bfa', '#fbbf24', '#f43f5e', '#22d3ee', '#fb7185', '#f97316'
 ];
 
-/* ---------- SISTEM PROFIL & CATATAN (CANVAS) ---------- */
-const STORAGE_KEY = 'kalender_canvas_app_data';
+/* ---------- SUPABASE INITIALIZATION ---------- */
+const SUPABASE_URL = 'https://eogdtpkiwzlarllnxsrj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvZ2R0cGtpd3psYXJsbG54c3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjI5M3Ijo5MjE5MjI5M30.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvZ2R0cGtpd3psYXJsbG54c3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTA...YOyI';
 
+let supabaseClient = null;
+try {
+  if (window.supabase && window.supabase.createClient) {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+} catch (e) {
+  console.error('Gagal menginisialisasi Supabase client:', e);
+}
+
+/* ---------- SISTEM PROFIL & CATATAN (SUPABASE SYNC) ---------- */
 let appData = {
   activeProfileId: 'p_default',
   profiles: [
@@ -35,37 +39,99 @@ let appData = {
       id: 'p_default',
       name: 'Profil A',
       color: '#60a5fa',
-      notes: {} // format: { "YYYY-MM-DD": [ { id, text, tag, createdAt } ] }
+      notes: {} // format lokal: { "YYYY-MM-DD": [ { id, text, tag, createdAt } ] }
     }
   ],
   tags: ['Catatan', 'Penting', 'Ide', 'Deadline', 'Routine']
 };
 
-function loadAppData() {
+async function loadAppDataFromSupabase() {
+  if (!supabaseClient) {
+    loadAppDataLocalFallback();
+    return;
+  }
+
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    // 1. Fetch Profiles
+    const { data: profilesData, error: profileErr } = await supabaseClient
+      .from('cal_profiles')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (profileErr) throw profileErr;
+
+    if (profilesData && profilesData.length > 0) {
+      appData.profiles = profilesData.map(p => ({
+        id: p.id,
+        name: p.name,
+        color: p.color || '#60a5fa',
+        notes: {}
+      }));
+    }
+
+    if (!appData.profiles.find(p => p.id === appData.activeProfileId)) {
+      appData.activeProfileId = appData.profiles[0].id;
+    }
+
+    // 2. Fetch Items (Catatan) untuk profil aktif
+    await fetchActiveProfileNotes();
+  } catch (err) {
+    console.error('Gagal memuat data dari Supabase, menggunakan fallback lokal:', err);
+    loadAppDataLocalFallback();
+  }
+
+  applyThemeColor();
+  render();
+}
+
+async function fetchActiveProfileNotes() {
+  if (!supabaseClient) return;
+  const p = getActiveProfile();
+  if (!p) return;
+
+  try {
+    const { data: itemsData, error: itemErr } = await supabaseClient
+      .from('cal_items')
+      .select('*')
+      .eq('profile_id', p.id);
+
+    if (itemErr) throw itemErr;
+
+    p.notes = {};
+    if (itemsData) {
+      itemsData.forEach(item => {
+        if (!p.notes[item.date_key]) {
+          p.notes[item.date_key] = [];
+        }
+        p.notes[item.date_key].push({
+          id: item.id,
+          text: item.text,
+          tag: item.tag || 'Catatan',
+          createdAt: new Date(item.created_at).getTime()
+        });
+      });
+    }
+  } catch (err) {
+    console.error('Gagal mengambil catatan item:', err);
+  }
+}
+
+function loadAppDataLocalFallback() {
+  try {
+    const raw = localStorage.getItem('kalender_canvas_app_data');
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.profiles) && parsed.profiles.length > 0) {
-        appData = parsed;
-      }
+      if (parsed && Array.isArray(parsed.profiles)) appData = parsed;
     }
-  } catch (e) {
-    console.error('Gagal membaca data profil lokal:', e);
-  }
-  // Pastikan active profile valid
-  if (!getActiveProfile()) {
-    appData.activeProfileId = appData.profiles[0].id;
-  }
+  } catch (e) {}
+  if (!getActiveProfile()) appData.activeProfileId = appData.profiles[0].id;
   applyThemeColor();
 }
 
-function saveAppData() {
+function saveAppDataLocalCache() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
-  } catch (e) {
-    console.error('Gagal menyimpan data aplikasi:', e);
-  }
+    localStorage.setItem('kalender_canvas_app_data', JSON.stringify(appData));
+  } catch (e) {}
 }
 
 function getActiveProfile() {
@@ -87,7 +153,6 @@ function applyThemeColor() {
     if (cardDot) cardDot.style.background = p.color;
     if (cardName) cardName.textContent = p.name;
 
-    // Hitung total catatan profil
     let totalNotes = 0;
     Object.values(p.notes || {}).forEach(arr => { if (Array.isArray(arr)) totalNotes += arr.length; });
     if (cardNotes) cardNotes.textContent = `${totalNotes} catatan`;
@@ -106,7 +171,6 @@ function getJDN(y, m, d) {
 }
 
 function getPasaran(jdn) {
-  // Kamis 15 Okt 2026 = Kliwon (offset +2)
   return PASARAN[((jdn + 2) % 5 + 5) % 5];
 }
 
@@ -203,7 +267,7 @@ async function loadGcalYear(y) {
   }
 }
 
-/* ---------- RENDER GRID KALENDER (LOCKED DESIGN 1x1) ---------- */
+/* ---------- RENDER GRID KALENDER ---------- */
 function render() {
   const head = document.getElementById('big');
   const subh = document.getElementById('small');
@@ -254,7 +318,6 @@ function render() {
     if (isToday) cellCls += ' today';
     if (wd === 6 || holidayDesc) cellCls += ' holiday-cell';
 
-    // Cek apakah ada catatan di tanggal ini untuk profil aktif
     const hasNotes = activeProfile && activeProfile.notes && Array.isArray(activeProfile.notes[dateKey]) && activeProfile.notes[dateKey].length > 0;
     const dotHtml = hasNotes ? `<div class="note-indicators"><span class="note-badge-dot"></span></div>` : '';
 
@@ -272,7 +335,6 @@ function render() {
   cal.innerHTML = html;
 
   if (holidayList) {
-    // Kumpulkan juga catatan profil aktif untuk bulan ini (state.y, state.m)
     const monthUserNotes = [];
     if (activeProfile && activeProfile.notes) {
       for (let d = 1; d <= lastD; d++) {
@@ -289,7 +351,6 @@ function render() {
     let hasContent = false;
     let containerHtml = '';
 
-    // Bagian Libur Nasional & Cuti (Warna Merah)
     if (monthHolidays.length > 0) {
       hasContent = true;
       containerHtml += `<div class="info-section-title holiday-title-color"><span>Libur Nasional & Cuti</span></div><ul>`;
@@ -299,7 +360,6 @@ function render() {
       containerHtml += `</ul>`;
     }
 
-    // Jika ada catatan pengguna di bulan ini, tampilkan dengan divider dan warna biru
     if (monthUserNotes.length > 0) {
       if (hasContent) {
         containerHtml += `<div class="info-divider"></div>`;
@@ -386,7 +446,7 @@ function renderNotesList() {
   container.innerHTML = html;
 }
 
-function handleAddNote(e) {
+async function handleAddNote(e) {
   e.preventDefault();
   const input = document.getElementById('input-note-text');
   const tagSelect = document.getElementById('select-note-tag');
@@ -395,25 +455,41 @@ function handleAddNote(e) {
   const text = input.value.trim();
   if (!text) return;
   const tag = tagSelect ? tagSelect.value : 'Catatan';
-
   const p = getActiveProfile();
+
+  const noteId = 'item_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+  const newNote = { id: noteId, text, tag, createdAt: Date.now() };
+
   if (!p.notes) p.notes = {};
   if (!Array.isArray(p.notes[selectedDateKey])) p.notes[selectedDateKey] = [];
+  p.notes[selectedDateKey].push(newNote);
 
-  p.notes[selectedDateKey].push({
-    id: 'note_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-    text: text,
-    tag: tag,
-    createdAt: Date.now()
-  });
-
-  saveAppData();
+  // Optimistic UI update
   input.value = '';
   renderNotesList();
-  render(); // update dot indicator di kalender
+  render();
+
+  // Sync Supabase
+  if (supabaseClient) {
+    try {
+      const { error } = await supabaseClient.from('cal_items').insert({
+        id: noteId,
+        profile_id: p.id,
+        date_key: selectedDateKey,
+        text: text,
+        tag: tag
+      });
+      if (error) throw error;
+    } catch (err) {
+      console.error('Gagal menyimpan catatan ke Supabase:', err);
+      alert('Gagal menyinkronkan catatan ke server.');
+    }
+  } else {
+    saveAppDataLocalCache();
+  }
 }
 
-function handleDeleteNote(noteId) {
+async function handleDeleteNote(noteId) {
   if (!selectedDateKey) return;
   const p = getActiveProfile();
   if (!p.notes || !p.notes[selectedDateKey]) return;
@@ -423,9 +499,20 @@ function handleDeleteNote(noteId) {
     delete p.notes[selectedDateKey];
   }
 
-  saveAppData();
   renderNotesList();
   render();
+
+  if (supabaseClient) {
+    try {
+      const { error } = await supabaseClient.from('cal_items').delete().eq('id', noteId);
+      if (error) throw error;
+    } catch (err) {
+      console.error('Gagal menghapus catatan dari Supabase:', err);
+      alert('Gagal menghapus dari server.');
+    }
+  } else {
+    saveAppDataLocalCache();
+  }
 }
 
 /* ---------- DRAWER & PROFIL SWITCHER ---------- */
@@ -466,14 +553,17 @@ function renderDrawerQuickProfiles() {
   container.innerHTML = html;
 }
 
-function switchProfile(profileId) {
+async function switchProfile(profileId) {
   const exists = appData.profiles.find(p => p.id === profileId);
   if (!exists) return;
   appData.activeProfileId = profileId;
-  saveAppData();
   applyThemeColor();
-  render();
   toggleDrawer(false);
+
+  if (supabaseClient) {
+    await fetchActiveProfileNotes();
+  }
+  render();
 }
 
 /* ---------- KELOLA PROFIL (MANAGE PROFILES) ---------- */
@@ -485,6 +575,9 @@ function openManageProfilesModal() {
   let html = '';
   appData.profiles.forEach(p => {
     const isOnly = appData.profiles.length <= 1;
+    let noteCount = 0;
+    Object.values(p.notes || {}).forEach(arr => { if (Array.isArray(arr)) noteCount += arr.length; });
+
     html += `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px">
         <div style="display:flex;align-items:center;gap:8px">
@@ -502,45 +595,65 @@ function openManageProfilesModal() {
   openModal('modal-manage-profiles');
 }
 
-function handleCreateProfile(e) {
+async function handleCreateProfile(e) {
   e.preventDefault();
   const input = document.getElementById('input-new-profile-name');
   if (!input) return;
   const name = input.value.trim();
   if (!name) return;
 
-  // Pilih warna secara acak dari palet
   const colorIndex = appData.profiles.length % PALETTES.length;
   const color = PALETTES[colorIndex];
-
   const newId = 'p_' + Date.now();
-  appData.profiles.push({
-    id: newId,
-    name: name,
-    color: color,
-    notes: {}
-  });
+
+  const newProf = { id: newId, name, color, notes: {} };
+  appData.profiles.push(newProf);
   appData.activeProfileId = newId;
-  saveAppData();
 
   input.value = '';
   closeModal('modal-manage-profiles');
+  applyThemeColor();
   render();
+
+  if (supabaseClient) {
+    try {
+      const { error } = await supabaseClient.from('cal_profiles').insert({ id: newId, name, color });
+      if (error) throw error;
+    } catch (err) {
+      console.error('Gagal membuat profil di Supabase:', err);
+      alert('Gagal menyimpan profil ke server.');
+    }
+  } else {
+    saveAppDataLocalCache();
+  }
 }
 
-function promptRenameProfile(id) {
+async function promptRenameProfile(id) {
   const p = appData.profiles.find(x => x.id === id);
   if (!p) return;
   const newName = prompt('Masukkan nama baru untuk profil:', p.name);
   if (newName && newName.trim() && newName.trim() !== p.name) {
+    const oldName = p.name;
     p.name = newName.trim();
-    saveAppData();
-    openManageProfilesModal(); // refresh list
+    openManageProfilesModal();
     render();
+
+    if (supabaseClient) {
+      try {
+        const { error } = await supabaseClient.from('cal_profiles').update({ name: p.name }).eq('id', id);
+        if (error) throw error;
+      } catch (err) {
+        console.error('Gagal update nama profil:', err);
+        p.name = oldName;
+        render();
+      }
+    } else {
+      saveAppDataLocalCache();
+    }
   }
 }
 
-function handleDeleteProfile(id) {
+async function handleDeleteProfile(id) {
   if (appData.profiles.length <= 1) {
     alert('Tidak bisa menghapus profil terakhir.');
     return;
@@ -553,9 +666,21 @@ function handleDeleteProfile(id) {
   if (appData.activeProfileId === id) {
     appData.activeProfileId = appData.profiles[0].id;
   }
-  saveAppData();
   openManageProfilesModal();
+  applyThemeColor();
   render();
+
+  if (supabaseClient) {
+    try {
+      const { error } = await supabaseClient.from('cal_profiles').delete().eq('id', id);
+      if (error) throw error;
+    } catch (err) {
+      console.error('Gagal menghapus profil dari Supabase:', err);
+      alert('Gagal menghapus dari server.');
+    }
+  } else {
+    saveAppDataLocalCache();
+  }
 }
 
 /* ---------- EKSPOR & IMPOR DATA (JSON) ---------- */
@@ -574,16 +699,16 @@ function handleImportFile(event) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     try {
       const imported = JSON.parse(e.target.result);
       if (imported && Array.isArray(imported.profiles) && imported.profiles.length > 0) {
         appData = imported;
         if (!getActiveProfile()) appData.activeProfileId = appData.profiles[0].id;
-        saveAppData();
+        applyThemeColor();
         render();
         closeModal('modal-backup');
-        alert('Data berhasil dipulihkan!');
+        alert('Data berhasil dipulihkan secara lokal!');
       } else {
         alert('Format file cadangan tidak valid.');
       }
@@ -613,13 +738,27 @@ function openThemeModal() {
   openModal('modal-theme');
 }
 
-function setProfileColor(col) {
+async function setProfileColor(col) {
   const p = getActiveProfile();
+  const oldCol = p.color;
   p.color = col;
-  saveAppData();
   applyThemeColor();
-  openThemeModal(); // refresh swatches
+  openThemeModal();
   render();
+
+  if (supabaseClient) {
+    try {
+      const { error } = await supabaseClient.from('cal_profiles').update({ color: col }).eq('id', p.id);
+      if (error) throw error;
+    } catch (err) {
+      console.error('Gagal update warna profil:', err);
+      p.color = oldCol;
+      applyThemeColor();
+      render();
+    }
+  } else {
+    saveAppDataLocalCache();
+  }
 }
 
 /* ---------- TAGS & FILTER ---------- */
@@ -726,31 +865,28 @@ document.getElementById('prev').onclick = prevMonth;
 document.getElementById('next').onclick = nextMonth;
 document.getElementById('today').onclick = goToday;
 
-// Hamburger drawer triggers
 document.getElementById('btn-profile-menu').onclick = () => toggleDrawer(true);
 document.getElementById('btn-close-drawer').onclick = () => toggleDrawer(false);
 document.getElementById('drawer-backdrop').onclick = () => toggleDrawer(false);
 
-// Drawer menu item buttons
 document.getElementById('menu-btn-manage-profiles').onclick = openManageProfilesModal;
 document.getElementById('menu-btn-backup').onclick = () => { toggleDrawer(false); openModal('modal-backup'); };
 document.getElementById('menu-btn-theme').onclick = openThemeModal;
 document.getElementById('menu-btn-tags').onclick = openTagsModal;
-document.getElementById('menu-btn-search').onclick = openSearchModal;
+document.getElementById('menu-btn-search').onclick = openSearchManagerModal || openSearchModal;
 document.getElementById('menu-btn-help').onclick = () => { toggleDrawer(false); openModal('modal-help'); };
 document.getElementById('menu-btn-about').onclick = () => { toggleDrawer(false); openModal('modal-about'); };
 
-// Touch swipe gesture on calendar
 let touchStartX = 0;
 const touchArea = document.getElementById('touch-area');
 if (touchArea) {
   touchArea.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
   touchArea.addEventListener('touchend', e => {
     const dx = e.changedTouches[0].screenX - touchStartX;
-    if (Math.abs(dx) > 40) dx < 0 ? nextMonth() : prevMonth();
+    if (Math.abs(dx) > 0) dx < 0 ? nextMonth() : prevMonth();
   }, { passive: true });
 }
 
-// Start
-loadAppData();
+// Start with Supabase sync
+loadAppDataFromSupabase();
 loadData();
