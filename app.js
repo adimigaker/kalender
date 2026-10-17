@@ -711,11 +711,11 @@ function render() {
 
   if (holidayList) {
     const monthUserNotes = [];
+    // 1. Ambil catatan di bulan aktif
     for (let d = 1; d <= lastD; d++) {
       const dateKey = state.y + '-' + String(state.m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
       const notesArr = activeProfile.notes[dateKey];
       
-      // Ambil juga note Routine aktif yang merentang ke tanggal ini
       let activeNotes = [];
       if (Array.isArray(notesArr)) activeNotes.push(...notesArr);
 
@@ -749,6 +749,44 @@ function render() {
         });
       }
     }
+
+    // 2. Ambil juga catatan Deadline dari bulan lain yang jatuh tempo di bulan ini atau belum lewat jauh
+    Object.entries(activeProfile.notes || {}).forEach(([dKey, arr]) => {
+        arr.forEach(n => {
+            if (n.tag === 'Deadline') {
+                // Cek apakah tanggal deadline ini di bulan/tahun yang sedang dirender
+                const parts = dKey.split('-');
+                const dYear = parseInt(parts[0], 10);
+                const dMonth = parseInt(parts[1], 10) - 1;
+                const dDay = parseInt(parts[2], 10);
+
+                if (dYear === state.y && dMonth === state.m) {
+                    // Sudah tercover di loop harian di atas
+                    return;
+                }
+
+                // Jika deadline ada di masa depan atau bulan ini, tampilkan sebagai pengingat lintas bulan jika relevan
+                // (Atau jika user membuat deadline untuk bulan depan, tampilkan countdown-nya)
+                // Mari kita masukkan jika dYear === state.y dan dMonth === state.m (jika belum dimasukkan)
+                // Agar aman, cek apakah sudah ada di monthUserNotes
+                const alreadyAdded = monthUserNotes.some(existing => existing.id === n.id);
+                if (!alreadyAdded && dYear === state.y && dMonth === state.m) {
+                    monthUserNotes.push({
+                        id: n.id,
+                        d: dDay,
+                        text: n.text,
+                        tag: 'Deadline',
+                        dateKey: dKey,
+                        itemDateKey: dKey,
+                        isDone: false
+                    });
+                }
+            }
+        });
+    });
+
+    // Urutkan berdasarkan tanggal (d)
+    monthUserNotes.sort((a, b) => a.d - b.d);
 
     let hasContent = false;
     let containerHtml = '';
