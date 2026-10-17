@@ -272,10 +272,48 @@ function render() {
   cal.innerHTML = html;
 
   if (holidayList) {
-    if (monthHolidays.length) {
-      let hHtml = '<div class="holiday-title">Libur & Cuti:</div><ul>';
-      monthHolidays.forEach(h => { hHtml += `<li><span class="h-date-text">${h.d} ${BLN[state.m]}</span>: ${h.desc}</li>`; });
-      holidayList.innerHTML = hHtml + '</ul>';
+    // Kumpulkan juga catatan profil aktif untuk bulan ini (state.y, state.m)
+    const monthUserNotes = [];
+    if (activeProfile && activeProfile.notes) {
+      for (let d = 1; d <= lastD; d++) {
+        const dateKey = `${state.y}-${String(state.m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const notesArr = activeProfile.notes[dateKey];
+        if (Array.isArray(notesArr) && notesArr.length > 0) {
+          notesArr.forEach(n => {
+            monthUserNotes.push({ d, text: n.text, tag: n.tag || 'Catatan' });
+          });
+        }
+      }
+    }
+
+    let hasContent = false;
+    let containerHtml = '';
+
+    // Bagian Libur Nasional & Cuti (Warna Merah)
+    if (monthHolidays.length > 0) {
+      hasContent = true;
+      containerHtml += `<div class="info-section-title holiday-title-color"><span>Libur Nasional & Cuti</span></div><ul>`;
+      monthHolidays.forEach(h => {
+        containerHtml += `<li><span class="date-red">${h.d} ${BLN[state.m]}</span>: ${escapeHtml(h.desc)}</li>`;
+      });
+      containerHtml += `</ul>`;
+    }
+
+    // Jika ada catatan pengguna di bulan ini, tampilkan dengan divider dan warna biru
+    if (monthUserNotes.length > 0) {
+      if (hasContent) {
+        containerHtml += `<div class="info-divider"></div>`;
+      }
+      hasContent = true;
+      containerHtml += `<div class="info-section-title user-title-color"><span>Catatan Profil (${escapeHtml(activeProfile.name)})</span></div><ul>`;
+      monthUserNotes.forEach(note => {
+        containerHtml += `<li><span class="date-blue">${note.d} ${BLN[state.m]}</span>: ${escapeHtml(note.text)} <span style="font-size:0.65rem;color:var(--sub)">[${escapeHtml(note.tag)}]</span></li>`;
+      });
+      containerHtml += `</ul>`;
+    }
+
+    if (hasContent) {
+      holidayList.innerHTML = containerHtml;
       holidayList.style.display = 'block';
     } else {
       holidayList.innerHTML = '';

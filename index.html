@@ -61,12 +61,16 @@ header{padding:0.6rem 0;display:flex;align-items:center;justify-content:space-be
 }
 .note-badge-dot{width:4px;height:4px;border-radius:50%;background:var(--profile-color);box-shadow:0 0 3px var(--profile-color)}
 
-/* Holiday Notes Section */
-.holiday-notes{margin-top:16px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:0.8rem}
-.holiday-title{font-weight:700;margin-bottom:6px;color:var(--blue)}
-.holiday-notes ul{margin:0;padding-left:16px;color:var(--sub)}
-.holiday-notes li{margin-bottom:4px}
-.h-date-text{color:var(--text);font-weight:600}
+/* Info Container Section (Merged Libur & User Notes) */
+.info-container{margin-top:16px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:0.8rem}
+.info-section-title{font-weight:700;margin-bottom:6px;font-size:0.85rem;display:flex;align-items:center;justify-content:space-between}
+.info-section-title.holiday-title-color{color:var(--red)}
+.info-section-title.user-title-color{color:var(--blue)}
+.info-container ul{margin:0;padding-left:16px;color:var(--sub)}
+.info-container li{margin-bottom:4px;line-height:1.4}
+.date-red{color:var(--red);font-weight:700}
+.date-blue{color:var(--blue);font-weight:700}
+.info-divider{height:1px;background:var(--border);margin:10px 0}
 
 /* Footer */
 footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-top:1px solid var(--border);margin-top:12px}
@@ -227,7 +231,7 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
 
 <!-- 3. Grid Kalender (Locked 1x1) -->
 <div id="cal"></div>
-<div id="holiday-list" class="holiday-notes" style="display:none"></div>
+<div id="holiday-list" class="info-container" style="display:none"></div>
 
 <!-- 4. Footer -->
 <footer>Kalender Canvas v22 — Masehi + Hijri Kemenag + Pasaran + Catatan Profil</footer>
