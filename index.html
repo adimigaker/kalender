@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<title>Kalender Canvas v24</title>
+<title>Kalender Canvas v25</title>
 <style>
 :root{
   --bg:#0f172a;--card:#162032;--card-hover:#1e293b;--text:#e2e8f0;--sub:#94a3b8;
@@ -206,7 +206,21 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
   padding:9px 12px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;
 }
 .note-item-left{display:flex;flex-direction:column;gap:3px;flex-grow:1}
-.note-item-text{font-size:0.85rem;color:var(--text);word-break:break-word}
+.btn-category {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-category:hover, .btn-category.active {
+    background: var(--profile-color);
+    color: white;
+    border-color: var(--profile-color);
+}
+
 .note-tag-badge{
   align-self:flex-start;font-size:0.65rem;padding:2px 6px;border-radius:4px;
   font-weight:600;background:rgba(255,255,255,0.06);color:var(--sub);
@@ -295,7 +309,7 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
 <div id="holiday-list" class="info-container" style="display:none"></div>
 
 <!-- 4. Footer -->
-<footer>Kalender Canvas v24 — Supabase Sync + Error Log Visual</footer>
+<footer>Kalender Canvas v25 — Supabase Routine Sync + Category Buttons</footer>
 </div>
 
 <!-- Banner kegagalan pustaka Supabase (dibaca sebelum app.js jalan) -->
@@ -431,14 +445,19 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
       <div class="form-group">
         <input class="form-input" id="input-note-text" placeholder="Tulis catatan untuk tanggal ini..." required autocomplete="off" />
       </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;overflow-x:auto;padding-bottom:5px;scrollbar-width:none">
+        <button type="button" class="btn-category active" onclick="selectCategory('Catatan')">Catatan</button>
+        <button type="button" class="btn-category" onclick="selectCategory('Penting')">Penting</button>
+        <button type="button" class="btn-category" onclick="selectCategory('Ide')">Ide</button>
+        <button type="button" class="btn-category" onclick="selectCategory('Deadline')">Deadline</button>
+        <button type="button" class="btn-category" onclick="selectCategory('Routine')">Routine</button>
+      </div>
+      <div id="routine-input-container" style="display:none;margin-bottom:8px">
+          <input class="form-input" id="input-routine-freq" type="number" placeholder="Frekuensi hari rutin..." />
+      </div>
       <div style="display:flex;gap:8px;align-items:center">
-        <select class="form-input" id="select-note-tag" style="flex:1">
-          <option value="Catatan">Catatan</option>
-          <option value="Penting">Penting</option>
-          <option value="Ide">Ide</option>
-          <option value="Deadline">Deadline</option>
-          <option value="Routine">Routine</option>
-        </select>
+        <input class="form-input" id="input-note-text" placeholder="Tulis catatan untuk tanggal ini..." required autocomplete="off" />
+        <input type="hidden" id="selected-note-tag" value="Catatan" />
         <button type="submit" class="btn-primary" id="btn-save-note">+ Simpan</button>
       </div>
       <div id="note-form-status" style="font-size:0.72rem;color:var(--sub)"></div>
@@ -585,7 +604,7 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
       <button class="close-btn" onclick="closeModal('modal-about')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
     </div>
     <div style="font-size:0.8rem;color:var(--sub);display:flex;flex-direction:column;gap:6px;line-height:1.4">
-      <strong style="color:var(--text);font-size:0.95rem">Kalender Canvas v24</strong>
+      <strong style="color:var(--text);font-size:0.95rem">Kalender Canvas v25</strong>
       <span>Aplikasi Kalender Masehi + Hijriyah + Pasaran Jawa + Canvas Multi-Profil dengan sinkronisasi Supabase.</span>
       <div style="margin-top:6px;padding:8px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
         <span>Tabel cloud: <code>cal_profiles</code> &amp; <code>cal_items</code>.</span><br>
