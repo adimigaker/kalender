@@ -669,16 +669,26 @@ function render() {
     const ps = getPasaran(jdn);
     const isToday = now.getFullYear() === state.y && now.getMonth() === state.m && now.getDate() === d;
     const dateKey = state.y + '-' + String(state.m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    
+    // Check if any note on this day is 'Penting'
+    const notesArr = activeProfile.notes[dateKey];
+    const isPenting = Array.isArray(notesArr) && notesArr.some(n => n.tag === 'Penting');
+    
     const holidayDesc = HOLIDAYS[dateKey] || GHOL[dateKey];
     if (holidayDesc) monthHolidays.push({ d: d, desc: holidayDesc });
 
     let cellCls = 'cell';
     if (isToday) cellCls += ' today';
     if (wd === 6 || holidayDesc) cellCls += ' holiday-cell';
+    else if (isPenting) cellCls += ' penting-cell'; // Tambahkan class untuk hari penting
 
-    const notesArr = activeProfile.notes[dateKey];
     const hasNotes = Array.isArray(notesArr) && notesArr.length > 0;
-    const dotHtml = hasNotes ? '<div class="note-indicators"><span class="note-badge-dot"></span></div>' : '';
+    let dotHtml = '';
+    if (hasNotes) {
+        const isPenting = notesArr.some(n => n.tag === 'Penting');
+        const badgeCls = isPenting ? 'note-badge-penting' : 'note-badge-dot';
+        dotHtml = '<div class="note-indicators"><span class="' + badgeCls + '"></span></div>';
+    }
 
     html += '<div class="' + cellCls + '" onclick="openDateNotes(\'' + dateKey + '\')" title="' + d + ' ' + BLN[state.m] + ' ' + state.y + '">' +
       '<div class="h">' + toArabicDigits(hj.d) + '</div>' +
@@ -818,6 +828,17 @@ async function handleEditNote(noteId) {
     saveLocalCache();
 }
 
+function getBadgeClass(tag) {
+    const mapping = {
+        'Catatan': 'badge-catatan',
+        'Penting': 'badge-penting',
+        'Ide': 'badge-ide',
+        'Deadline': 'badge-deadline',
+        'Routine': 'badge-routine'
+    };
+    return mapping[tag] || 'note-tag-badge';
+}
+
 function renderNotesList() {
   const container = document.getElementById('note-items-container');
   if (!container || !selectedDateKey) return;
@@ -855,7 +876,7 @@ function renderNotesList() {
       '<span class="note-item-text" style="' + (isDone ? 'text-decoration:line-through;opacity:0.6' : '') + '">' + escapeHtml(note.text) + '</span>' +
       '</div>' +
       '<div style="display:flex;gap:6px;align-items:center">' +
-      '<span class="note-tag-badge">' + escapeHtml(note.tag || 'Catatan') + '</span>' +
+      '<span class="note-tag-badge ' + getBadgeClass(note.tag) + '">' + escapeHtml(note.tag || 'Catatan') + '</span>' +
       (isRoutine && note.end_date ? '<span style="font-size:0.65rem;color:var(--sub)">Routine s/d ' + note.end_date + '</span>' : '') +
       '</div>' +
       '</div>' +
