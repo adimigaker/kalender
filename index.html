@@ -1,45 +1,474 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Kalender Masehi v21</title>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Kalender Canvas</title>
 <style>
-:root{--bg:#0f172a;--card:#162032;--text:#e2e8f0;--sub:#94a3b8;--border:#334155;--blue:#60a5fa;--green:#34d399;--red:#f87171}
-body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui;margin:0;padding:12px;display:flex;flex-direction:column;align-items:center;user-select:none;-webkit-user-select:none}
-.container{width:100%;max-width:450px;touch-action:pan-y}
-header{padding:0.75rem 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px}
+:root{
+  --bg:#0f172a;--card:#162032;--card-hover:#1e293b;--text:#e2e8f0;--sub:#94a3b8;
+  --border:#334155;--border-light:#475569;--blue:#60a5fa;--green:#34d399;--red:#f87171;
+  --profile-color:#60a5fa;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;margin:0;padding:12px;display:flex;flex-direction:column;align-items:center;user-select:none;-webkit-user-select:none}
+.container{width:100%;max-width:450px;touch-action:pan-y;position:relative}
+
+/* Top App Bar */
+.top-bar{display:flex;align-items:center;justify-content:space-between;padding:4px 0 10px 0;border-bottom:1px solid var(--border);margin-bottom:8px}
+.app-brand{display:flex;align-items:center;gap:8px;font-size:1rem;font-weight:700;letter-spacing:0.3px;color:var(--text)}
+.app-brand svg{width:20px;height:20px;stroke:var(--profile-color);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+
+/* Profile Pill & Hamburger Button */
+.profile-pill-btn{
+  background:var(--card);border:1px solid var(--border);color:var(--text);
+  padding:5px 10px;border-radius:20px;display:flex;align-items:center;gap:7px;
+  cursor:pointer;font-size:0.75rem;font-weight:600;transition:all 0.15s ease;
+}
+.profile-pill-btn:hover{background:var(--card-hover);border-color:var(--profile-color)}
+.profile-dot{width:8px;height:8px;border-radius:50%;background:var(--profile-color);box-shadow:0 0 6px var(--profile-color)}
+.profile-name-label{max-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hamburger-svg{width:16px;height:16px;stroke:var(--sub);stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+
+/* Header Bulan & Navigasi */
+header{padding:0.6rem 0;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .nav-btn{background:transparent;border:none;color:var(--text);cursor:pointer;padding:8px;display:flex;align-items:center;justify-content:center;border-radius:6px;transition:background 0.15s}
+.nav-btn:hover{background:var(--card)}
 .nav-btn svg{width:20px;height:20px;stroke:var(--text);stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .header-center{display:flex;flex-direction:column;align-items:center;text-align:center;flex-grow:1;cursor:pointer}
 .big{font-size:1.25rem;font-weight:700}
-.small{font-size:.7rem;color:var(--sub);margin-top:2px}
+.small{font-size:.7rem;color:var(--sub);margin-top:2px;font-family:serif,system-ui;line-height:1.3}
+
+/* Days of Week & Grid */
 .dow{display:grid;grid-template-columns:repeat(7,1fr);padding:.5rem 0;font-weight:600;font-size:.75rem;text-align:center}
 .d-blue{color:var(--blue)}.d-green{color:var(--green)}.d-red{color:var(--red)}
 .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:0.25px;background:var(--border);border:1px solid var(--border);touch-action:pan-y}
-.cell{background:var(--card);aspect-ratio:1/1;min-height:0;padding:1px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:0.75rem;}
-.cell.empty{background:var(--bg)}
+.cell{
+  background:var(--card);aspect-ratio:1/1;min-height:0;padding:1px;position:relative;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:0.75rem;
+  cursor:pointer;transition:background 0.1s ease;
+}
+.cell:hover:not(.empty){background:var(--card-hover)}
+.cell.empty{background:var(--bg);cursor:default}
 .g{font-size:1.05rem;font-weight:700;line-height:1.1}
 .p{font-size:.6rem;color:var(--sub);margin-top:1px;line-height:1.1}
 .h{position:absolute;top:3px;right:5px;font-size:.55rem;color:var(--sub);font-family:serif,system-ui;opacity:0.7;line-height:1;z-index:2}
-.today{outline:2px solid var(--blue);outline-offset:-2px;z-index:2}
+.today{outline:2px solid var(--profile-color);outline-offset:-2px;z-index:2}
 .holiday-cell .g{color:var(--red)}
+
+/* Note indicator dot on calendar cell */
+.note-indicators{
+  position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
+  display:flex;gap:2px;align-items:center;pointer-events:none;z-index:3;
+}
+.note-badge-dot{width:4px;height:4px;border-radius:50%;background:var(--profile-color);box-shadow:0 0 3px var(--profile-color)}
+
+/* Holiday Notes Section */
 .holiday-notes{margin-top:16px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:0.8rem}
 .holiday-title{font-weight:700;margin-bottom:6px;color:var(--blue)}
 .holiday-notes ul{margin:0;padding-left:16px;color:var(--sub)}
 .holiday-notes li{margin-bottom:4px}
 .h-date-text{color:var(--text);font-weight:600}
+
+/* Footer */
+footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-top:1px solid var(--border);margin-top:12px}
+
+/* Drawer / Hamburger Menu */
+.drawer-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(3px);
+  z-index:100;opacity:0;pointer-events:none;transition:opacity 0.25s ease;
+}
+.drawer-backdrop.active{opacity:1;pointer-events:auto}
+.drawer{
+  position:fixed;top:0;right:-360px;width:100%;max-width:350px;height:100%;
+  background:var(--card);border-left:1px solid var(--border);box-shadow:-5px 0 25px rgba(0,0,0,0.5);
+  z-index:101;display:flex;flex-direction:column;transition:right 0.25s cubic-bezier(0.16,1,0.3,1);
+  overflow-y:auto;
+}
+.drawer.active{right:0}
+.drawer-header{
+  padding:16px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.drawer-title{font-size:1.05rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px}
+.close-btn{
+  background:transparent;border:none;color:var(--sub);cursor:pointer;
+  padding:6px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+}
+.close-btn:hover{color:var(--text);background:var(--border)}
+.close-btn svg{width:18px;height:18px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+
+/* Active Profile Card in Drawer */
+.active-profile-card{
+  margin:14px 18px;padding:12px 14px;background:rgba(255,255,255,0.03);
+  border:1px solid var(--border);border-radius:10px;display:flex;align-items:center;justify-content:space-between;
+}
+.active-profile-info{display:flex;align-items:center;gap:10px}
+.active-profile-badge{width:14px;height:14px;border-radius:50%;background:var(--profile-color);box-shadow:0 0 8px var(--profile-color)}
+.active-profile-text{display:flex;flex-direction:column}
+.active-profile-label{font-size:0.65rem;color:var(--sub);text-transform:uppercase;letter-spacing:0.5px}
+.active-profile-val{font-size:0.95rem;font-weight:700;color:var(--text)}
+.active-notes-count{font-size:0.7rem;padding:3px 8px;border-radius:12px;background:var(--border);color:var(--sub)}
+
+/* Menu Clusters */
+.menu-cluster{padding:10px 18px}
+.cluster-divider{height:1px;background:var(--border);margin:4px 18px}
+.cluster-label{
+  font-size:0.65rem;font-weight:700;color:var(--sub);letter-spacing:0.8px;
+  text-transform:uppercase;margin-bottom:8px;padding-left:4px;
+}
+.menu-item{
+  width:100%;background:transparent;border:none;color:var(--text);
+  padding:10px 12px;border-radius:8px;display:flex;align-items:center;gap:12px;
+  cursor:pointer;font-size:0.85rem;font-weight:500;text-align:left;transition:all 0.15s;
+}
+.menu-item:hover{background:var(--border);color:var(--text)}
+.menu-icon{width:18px;height:18px;stroke:var(--sub);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.menu-item:hover .menu-icon{stroke:var(--profile-color)}
+.menu-text{flex-grow:1}
+.menu-chevron{width:14px;height:14px;stroke:var(--sub);stroke-width:2;fill:none;opacity:0.6}
+
+/* Profile Switcher Quick List */
+.profile-quick-list{display:flex;flex-direction:column;gap:5px;margin-bottom:8px}
+.profile-chip{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:7px 12px;border-radius:8px;background:rgba(255,255,255,0.02);
+  border:1px solid var(--border);cursor:pointer;font-size:0.8rem;transition:all 0.15s;
+}
+.profile-chip:hover{background:var(--border)}
+.profile-chip.selected{border-color:var(--profile-color);background:rgba(96,165,250,0.08)}
+.profile-chip-left{display:flex;align-items:center;gap:8px}
+.chip-dot{width:8px;height:8px;border-radius:50%}
+
+/* Modals */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);
+  z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;
+  opacity:0;pointer-events:none;transition:opacity 0.2s ease;
+}
+.modal-backdrop.active{opacity:1;pointer-events:auto}
+.modal-box{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  width:100%;max-width:400px;max-height:85vh;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,0.6);
+  padding:18px;display:flex;flex-direction:column;gap:14px;
+}
+.modal-header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:10px}
+.modal-title{font-size:1rem;font-weight:700}
+
+/* Form inputs & buttons */
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-label{font-size:0.75rem;color:var(--sub);font-weight:600}
+.form-input{
+  background:var(--bg);border:1px solid var(--border);border-radius:6px;
+  padding:8px 10px;color:var(--text);font-size:0.85rem;outline:none;
+}
+.form-input:focus{border-color:var(--profile-color)}
+.btn-primary{
+  background:var(--profile-color);border:none;color:#0f172a;font-weight:700;
+  padding:8px 14px;border-radius:6px;cursor:pointer;font-size:0.85rem;transition:opacity 0.15s;
+}
+.btn-primary:hover{opacity:0.9}
+.btn-secondary{
+  background:var(--border);border:none;color:var(--text);font-weight:600;
+  padding:8px 14px;border-radius:6px;cursor:pointer;font-size:0.85rem;
+}
+.btn-danger{
+  background:rgba(248,113,113,0.15);border:1px solid var(--red);color:var(--red);
+  padding:4px 8px;border-radius:6px;cursor:pointer;font-size:0.75rem;
+}
+
+/* Date Notes Modal */
+.date-notes-header-info{display:flex;flex-direction:column;gap:2px}
+.date-masehi-title{font-size:1.1rem;font-weight:700}
+.date-hijri-pasaran{font-size:0.75rem;color:var(--sub)}
+.notes-list{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;margin:6px 0}
+.note-item{
+  background:var(--bg);border:1px solid var(--border);border-radius:8px;
+  padding:9px 12px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;
+}
+.note-item-left{display:flex;flex-direction:column;gap:3px;flex-grow:1}
+.note-item-text{font-size:0.85rem;color:var(--text);word-break:break-word}
+.note-tag-badge{
+  align-self:flex-start;font-size:0.65rem;padding:2px 6px;border-radius:4px;
+  font-weight:600;background:rgba(255,255,255,0.06);color:var(--sub);
+}
+.empty-notes-hint{font-size:0.8rem;color:var(--sub);text-align:center;padding:18px 0}
+
+/* Color palettes picker */
+.color-swatches{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0}
+.swatch{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform 0.15s}
+.swatch:hover{transform:scale(1.15)}
+.swatch.selected{border-color:#ffffff;box-shadow:0 0 8px currentColor}
 </style>
 </head>
 <body>
 <div class="container" id="touch-area">
+
+<!-- 1. Top App Bar (Header Native) -->
+<div class="top-bar">
+  <div class="app-brand">
+    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+    <span>Kalender Canvas</span>
+  </div>
+  <button class="profile-pill-btn" id="btn-profile-menu" title="Menu & Profil">
+    <span class="profile-dot" id="header-profile-dot"></span>
+    <span class="profile-name-label" id="header-profile-name">Profil A</span>
+    <svg class="hamburger-svg" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+  </button>
+</div>
+
+<!-- 2. Header Navigasi Bulan & Tanggal Hijri (Locked Style) -->
 <header>
-<button class="nav-btn" id="prev" title="Bulan Sebelumnya"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
-<div class="header-center" id="today"><div class="big" id="big">Oktober 2026</div><div class="small" id="small" style="font-family:serif,system-ui;font-size:.65rem;color:var(--sub);line-height:1.3">٤ جُمَادَى الْأَوَّل ١٤٤٨ H</div></div>
-<button class="nav-btn" id="next" title="Bulan Berikutnya"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
+  <button class="nav-btn" id="prev" title="Bulan Sebelumnya"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+  <div class="header-center" id="today">
+    <div class="big" id="big">Oktober 2026</div>
+    <div class="small" id="small">٤ جُمَادَى الْأَوَّل ١٤٤٨ H</div>
+  </div>
+  <button class="nav-btn" id="next" title="Bulan Berikutnya"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
 </header>
+
+<!-- 3. Grid Kalender (Locked 1x1) -->
 <div id="cal"></div>
 <div id="holiday-list" class="holiday-notes" style="display:none"></div>
-<footer style="text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-top:1px solid var(--border);margin-top:8px">Kalender v21.3 — Masehi + Hijri Kemenag + Pasaran + Libur</footer>
+
+<!-- 4. Footer -->
+<footer>Kalender Canvas v22 — Masehi + Hijri Kemenag + Pasaran + Catatan Profil</footer>
 </div>
-<script src="app.js?v=22"></script>
+
+<!-- ================= HAMBURGER DRAWER ================= -->
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+<aside class="drawer" id="drawer-panel">
+  <div class="drawer-header">
+    <div class="drawer-title">
+      <svg class="menu-icon" style="stroke:var(--profile-color)" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+      <span>Menu & Profil</span>
+    </div>
+    <button class="close-btn" id="btn-close-drawer"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+  </div>
+
+  <!-- Kartu Status Profil Aktif -->
+  <div class="active-profile-card">
+    <div class="active-profile-info">
+      <div class="active-profile-badge" id="card-profile-dot"></div>
+      <div class="active-profile-text">
+        <span class="active-profile-label">Profil Aktif</span>
+        <span class="active-profile-val" id="card-profile-name">Profil A</span>
+      </div>
+    </div>
+    <span class="active-notes-count" id="card-notes-count">0 catatan</span>
+  </div>
+
+  <!-- Klaster 1: Profil (Core Feature) -->
+  <div class="menu-cluster">
+    <div class="cluster-label">Klaster 1: Profil</div>
+    
+    <!-- Quick Switcher -->
+    <div class="profile-quick-list" id="drawer-quick-profiles"></div>
+
+    <button class="menu-item" id="menu-btn-manage-profiles">
+      <svg class="menu-icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+      <span class="menu-text">Kelola Profil</span>
+      <svg class="menu-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </button>
+    <button class="menu-item" id="menu-btn-backup">
+      <svg class="menu-icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+      <span class="menu-text">Ekspor / Impor Data</span>
+      <svg class="menu-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </button>
+  </div>
+
+  <div class="cluster-divider"></div>
+
+  <!-- Klaster 2: Tampilan & Kanvas (Customization) -->
+  <div class="menu-cluster">
+    <div class="cluster-label">Klaster 2: Tampilan & Kanvas</div>
+    <button class="menu-item" id="menu-btn-theme">
+      <svg class="menu-icon" viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"></circle><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"></circle><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"></circle><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"></circle><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.563-2.512 5.563-5.563C21.999 6.5 17.5 2 12 2z"></path></svg>
+      <span class="menu-text">Warna & Tema Profil</span>
+      <svg class="menu-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </button>
+    <button class="menu-item" id="menu-btn-tags">
+      <svg class="menu-icon" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+      <span class="menu-text">Filter & Label (Tags)</span>
+      <svg class="menu-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </button>
+  </div>
+
+  <div class="cluster-divider"></div>
+
+  <!-- Klaster 3: Utilitas & Sistem (Productivity & Support) -->
+  <div class="menu-cluster">
+    <div class="cluster-label">Klaster 3: Utilitas & Sistem</div>
+    <button class="menu-item" id="menu-btn-search">
+      <svg class="menu-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <span class="menu-text">Pencarian Catatan</span>
+      <svg class="menu-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </button>
+    <button class="menu-item" id="menu-btn-help">
+      <svg class="menu-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+      <span class="menu-text">Bantuan & Umpan Balik</span>
+      <svg class="menu-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </button>
+    <button class="menu-item" id="menu-btn-about">
+      <svg class="menu-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+      <span class="menu-text">Tentang Aplikasi</span>
+      <svg class="menu-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </button>
+  </div>
+</aside>
+
+<!-- ================= MODAL CATATAN TANGGAL ================= -->
+<div class="modal-backdrop" id="modal-date-notes">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="date-notes-header-info">
+        <span class="date-masehi-title" id="note-modal-masehi">15 Oktober 2026</span>
+        <span class="date-hijri-pasaran" id="note-modal-sub">Kliwon • ٤ Jumadil Awal 1448 H</span>
+      </div>
+      <button class="close-btn" onclick="closeModal('modal-date-notes')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+    </div>
+
+    <div style="font-size:0.75rem;color:var(--sub);display:flex;align-items:center;gap:6px">
+      <span>Profil:</span>
+      <strong id="note-modal-profile-label" style="color:var(--profile-color)">Profil A</strong>
+    </div>
+
+    <!-- List Catatan -->
+    <div class="notes-list" id="note-items-container"></div>
+
+    <!-- Form Tambah Catatan Baru -->
+    <form id="form-add-note" onsubmit="handleAddNote(event)" style="display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--border);padding-top:10px">
+      <div class="form-group">
+        <input class="form-input" id="input-note-text" placeholder="Tulis catatan untuk tanggal ini..." required autocomplete="off" />
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select class="form-input" id="select-note-tag" style="flex:1">
+          <option value="Catatan">Catatan</option>
+          <option value="Penting">Penting</option>
+          <option value="Ide">Ide</option>
+          <option value="Deadline">Deadline</option>
+          <option value="Routine">Routine</option>
+        </select>
+        <button type="submit" class="btn-primary">+ Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ================= MODAL KELOLA PROFIL ================= -->
+<div class="modal-backdrop" id="modal-manage-profiles">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Kelola Profil</span>
+      <button class="close-btn" onclick="closeModal('modal-manage-profiles')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+    </div>
+    
+    <!-- Daftar Profil untuk diedit/dihapus -->
+    <div id="manage-profiles-list" style="display:flex;flex-direction:column;gap:8px"></div>
+
+    <!-- Tambah Profil Baru -->
+    <form id="form-create-profile" onsubmit="handleCreateProfile(event)" style="border-top:1px solid var(--border);padding-top:12px;display:flex;flex-direction:column;gap:8px">
+      <span style="font-size:0.8rem;font-weight:700">Tambah Profil Baru</span>
+      <div style="display:flex;gap:8px">
+        <input class="form-input" id="input-new-profile-name" placeholder="Nama profil baru..." required style="flex:1" />
+        <button type="submit" class="btn-primary">+ Tambah</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ================= MODAL EKSPOR / IMPOR ================= -->
+<div class="modal-backdrop" id="modal-backup">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Ekspor & Impor Data</span>
+      <button class="close-btn" onclick="closeModal('modal-backup')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+    </div>
+    <p style="font-size:0.8rem;color:var(--sub);margin:0">Cadangkan semua profil dan catatan kanvas Anda dalam format JSON, atau pulihkan dari file cadangan sebelumnya.</p>
+    
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn-primary" onclick="exportDataJSON()" style="display:flex;align-items:center;justify-content:center;gap:8px">
+        <svg style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        <span>Unduh File Cadangan (JSON)</span>
+      </button>
+
+      <div style="border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:6px">
+        <span class="form-label">Pulihkan dari File Cadangan:</span>
+        <input type="file" id="file-import-json" accept=".json" class="form-input" onchange="handleImportFile(event)" />
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MODAL WARNA TEMA PROFIL ================= -->
+<div class="modal-backdrop" id="modal-theme">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Warna & Tema Profil</span>
+      <button class="close-btn" onclick="closeModal('modal-theme')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+    </div>
+    <p style="font-size:0.8rem;color:var(--sub);margin:0">Pilih warna aksen khas untuk <strong id="theme-profile-target-name">Profil A</strong>:</p>
+    <div class="color-swatches" id="theme-swatches-box"></div>
+  </div>
+</div>
+
+<!-- ================= MODAL FILTER & LABEL ================= -->
+<div class="modal-backdrop" id="modal-tags">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Filter & Label (Tags)</span>
+      <button class="close-btn" onclick="closeModal('modal-tags')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+    </div>
+    <p style="font-size:0.8rem;color:var(--sub);margin:0">Kategori catatan bawaan di kanvas profil:</p>
+    <div id="tags-list-container" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0"></div>
+    <div style="font-size:0.75rem;color:var(--sub)">Tag digunakan untuk memfilter dan mengelompokkan catatan di setiap tanggal.</div>
+  </div>
+</div>
+
+<!-- ================= MODAL PENCARIAN GLOBAL ================= -->
+<div class="modal-backdrop" id="modal-search">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Pencarian Catatan</span>
+      <button class="close-btn" onclick="closeModal('modal-search')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+    </div>
+    <input class="form-input" id="input-global-search" placeholder="Cari kata kunci catatan..." oninput="handleGlobalSearch(this.value)" autocomplete="off" />
+    <div id="search-results-box" style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- ================= MODAL BANTUAN ================= -->
+<div class="modal-backdrop" id="modal-help">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Bantuan & Panduan</span>
+      <button class="close-btn" onclick="closeModal('modal-help')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+    </div>
+    <div style="font-size:0.8rem;color:var(--text);display:flex;flex-direction:column;gap:8px;line-height:1.4">
+      <div><strong>1. Menulis Catatan:</strong> Ketuk tanggal mana saja di kalender untuk membuka kanvas catatan tanggal tersebut.</div>
+      <div><strong>2. Multi-Profil:</strong> Ketuk tombol profil di pojok kanan atas untuk berpindah profil atau membuat profil baru (misal: Kerja, Pribadi, Proyek).</div>
+      <div><strong>3. Backup Data:</strong> Gunakan menu Ekspor/Impor di menu hamburger untuk mengunduh salinan cadangan JSON ke perangkat Anda.</div>
+      <div><strong>4. Tetap Sinkron:</strong> Tanggal Hijriyah, Pasaran Jawa, dan Libur Nasional otomatis terintegrasi.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MODAL TENTANG ================= -->
+<div class="modal-backdrop" id="modal-about">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Tentang Aplikasi</span>
+      <button class="close-btn" onclick="closeModal('modal-about')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+    </div>
+    <div style="font-size:0.8rem;color:var(--sub);display:flex;flex-direction:column;gap:6px;line-height:1.4">
+      <strong style="color:var(--text);font-size:0.95rem">Kalender Canvas v22</strong>
+      <span>Aplikasi Kalender Masehi + Hijriyah (Kemenag) + Pasaran Jawa + Canvas Multi-Profil.</span>
+      <div style="margin-top:6px;padding:8px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
+        <span>Dibuat untuk produktivitas & kreativitas tanpa batas.</span><br>
+        <span style="color:var(--profile-color);font-weight:600">Dikembangkan bersama Insan Majnun.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=25"></script>
 </body>
 </html>
