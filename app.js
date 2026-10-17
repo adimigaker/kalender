@@ -673,14 +673,20 @@ function render() {
     // Check if any note on this day is 'Penting'
     const notesArr = activeProfile.notes[dateKey];
     const isPenting = Array.isArray(notesArr) && notesArr.some(n => n.tag === 'Penting');
-    
+    const isRoutine = Array.isArray(notesArr) && notesArr.some(n => n.tag === 'Routine');
+    const isDeadline = Array.isArray(notesArr) && notesArr.some(n => n.tag === 'Deadline');
+    const isIde = Array.isArray(notesArr) && notesArr.some(n => n.tag === 'Ide');
+
     const holidayDesc = HOLIDAYS[dateKey] || GHOL[dateKey];
     if (holidayDesc) monthHolidays.push({ d: d, desc: holidayDesc });
 
     let cellCls = 'cell';
     if (isToday) cellCls += ' today';
     if (wd === 6 || holidayDesc) cellCls += ' holiday-cell';
-    else if (isPenting) cellCls += ' penting-cell'; // Tambahkan class untuk hari penting
+    if (isPenting) cellCls += ' penting-cell';
+    if (isRoutine) cellCls += ' routine-cell';
+    if (isDeadline) cellCls += ' deadline-cell';
+    if (isIde) cellCls += ' ide-cell';
 
     const hasNotes = Array.isArray(notesArr) && notesArr.length > 0;
     let dotHtml = '';
@@ -866,14 +872,21 @@ function renderNotesList() {
   let html = '';
   notes.forEach(note => {
     const isRoutine = note.tag === 'Routine';
-    const isDone = isRoutine ? (note.routine_meta && note.routine_meta[selectedDateKey]) : note.done;
+    const isDone = isRoutine ? (note.routine_meta && note.routine_meta[selectedDateKey]) : false;
     const checkedAttr = isDone ? 'checked' : '';
+    
+    // Checkbox hanya untuk Routine
+    const checkboxHtml = isRoutine 
+      ? '<input type="checkbox" ' + checkedAttr + ' onchange="toggleNoteDone(\'' + note.id + '\', this.checked)" style="width:18px;height:18px;cursor:pointer" />' 
+      : '';
+      
+    const textStyle = isRoutine && isDone ? 'text-decoration:line-through;opacity:0.6' : '';
     
     html += '<div class="note-item">' +
       '<div class="note-item-left">' +
       '<div style="display:flex;align-items:center;gap:8px">' +
-      '<input type="checkbox" ' + checkedAttr + ' onchange="toggleNoteDone(\'' + note.id + '\', this.checked)" style="width:18px;height:18px;cursor:pointer" />' +
-      '<span class="note-item-text" style="' + (isDone ? 'text-decoration:line-through;opacity:0.6' : '') + '">' + escapeHtml(note.text) + '</span>' +
+      checkboxHtml +
+      '<span class="note-item-text" style="' + textStyle + '">' + escapeHtml(note.text) + '</span>' +
       '</div>' +
       '<div style="display:flex;gap:6px;align-items:center">' +
       '<span class="note-tag-badge ' + getBadgeClass(note.tag) + '">' + escapeHtml(note.tag || 'Catatan') + '</span>' +
