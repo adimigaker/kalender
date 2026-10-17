@@ -805,10 +805,13 @@ function render() {
       hasContent = true;
       containerHtml += '<div class="info-section-title user-title-color"><span>Catatan ' + escapeHtml(activeProfile.name) + '</span></div><ul style="list-style:none;padding:0;margin:0">';
       
+      // Kelompokkan berdasarkan tag untuk divider
+      let currentTag = null;
       monthUserNotes.forEach((note, idx) => {
-        if (idx > 0) {
-          containerHtml += '<div style="height:1px;background:var(--border);margin:6px 0"></div>';
+        if (currentTag !== null && currentTag !== note.tag) {
+          containerHtml += '<div style="height:1px;background:var(--border);margin:8px 0"></div>';
         }
+        currentTag = note.tag;
 
         let dateClass = 'date-blue';
         let customStyle = '';
@@ -828,21 +831,17 @@ function render() {
 
         let extraText = '';
         if (note.tag === 'Deadline') {
-          // Hitung countdown hari
           const now = new Date();
           const targetParts = note.dateKey.split('-');
           const targetDate = new Date(parseInt(targetParts[0]), parseInt(targetParts[1])-1, parseInt(targetParts[2]));
           const diffDays = Math.ceil((targetDate - now) / (1000 * 60 * 60 * 24));
           if (diffDays >= 0) {
-            extraText = ' <span style="font-size:0.65rem;background:rgba(239,68,68,0.2);color:#fca5v5;padding:1px 4px;border-radius:4px">H-' + diffDays + '</span>';
+            extraText = ' <span style="font-size:0.65rem;background:rgba(239,68,68,0.2);color:#fca5a5;padding:1px 4px;border-radius:4px">H-' + diffDays + '</span>';
           } else {
-            extraText = ' <span style="font-size:0.65rem;background:rgba(239,68,68,0.2);color:#fca5v5;padding:1px 4px;border-radius:4px">Lewat ' + Math.abs(diffDays) + 'h</span>';
+            extraText = ' <span style="font-size:0.65rem;background:rgba(239,68,68,0.2);color:#fca5a5;padding:1px 4px;border-radius:4px">Lewat ' + Math.abs(diffDays) + 'h</span>';
           }
         } else if (note.tag === 'Routine') {
-          // Checkbox hanya muncul jika tanggal saat ini berada dalam rentang start_date dan end_date
-          const currentDKey = note.dateKey; // tanggal di mana note ini terdaftar atau sedang aktif
-          // Untuk ringkasan bulanan, pastikan checkbox merujuk ke tanggal baris catatan tersebut (note.itemDateKey)
-          const targetDateKey = note.itemDateKey || currentDKey;
+          const targetDateKey = note.itemDateKey;
           const isValidRange = (!note.start_date || targetDateKey >= note.start_date) && (!note.end_date || targetDateKey <= note.end_date);
           if (isValidRange) {
             extraText = ' <input type="checkbox" ' + (note.isDone ? 'checked' : '') + ' onclick="selectedDateKey=\'' + targetDateKey + '\'; toggleNoteDone(\'' + note.id + '\', this.checked)" style="width:16px;height:16px;vertical-align:middle;margin-left:6px;cursor:pointer" />';
