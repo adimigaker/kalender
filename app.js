@@ -305,7 +305,7 @@ function render() {
         containerHtml += `<div class="info-divider"></div>`;
       }
       hasContent = true;
-      containerHtml += `<div class="info-section-title user-title-color"><span>Catatan Profil (${escapeHtml(activeProfile.name)})</span></div><ul>`;
+      containerHtml += `<div class="info-section-title user-title-color"><span>Catatan (${escapeHtml(activeProfile.name)})</span></div><ul>`;
       monthUserNotes.forEach(note => {
         containerHtml += `<li><span class="date-blue">${note.d} ${BLN[state.m]}</span>: ${escapeHtml(note.text)} <span style="font-size:0.65rem;color:var(--sub)">[${escapeHtml(note.tag)}]</span></li>`;
       });
