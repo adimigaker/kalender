@@ -873,7 +873,7 @@ document.getElementById('menu-btn-manage-profiles').onclick = openManageProfiles
 document.getElementById('menu-btn-backup').onclick = () => { toggleDrawer(false); openModal('modal-backup'); };
 document.getElementById('menu-btn-theme').onclick = openThemeModal;
 document.getElementById('menu-btn-tags').onclick = openTagsModal;
-document.getElementById('menu-btn-search').onclick = openSearchManagerModal || openSearchModal;
+document.getElementById('menu-btn-search').onclick = openSearchModal;
 document.getElementById('menu-btn-help').onclick = () => { toggleDrawer(false); openModal('modal-help'); };
 document.getElementById('menu-btn-about').onclick = () => { toggleDrawer(false); openModal('modal-about'); };
 
