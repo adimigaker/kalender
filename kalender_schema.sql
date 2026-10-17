@@ -1,3 +1,12 @@
+-- ============================================================
+-- ARSIP LAMA — JANGAN DIPAKAI.
+-- Skema yang benar-benar dipakai aplikasi Kalender Canvas v24 adalah
+-- supabase_schema.sql (tabel cal_profiles: id TEXT; cal_items: id TEXT,
+-- profile_id TEXT, date_key TEXT, text TEXT, tag TEXT).
+-- Berkas ini memakai struktur berbeda (uuid, calendar_key, start_at) dan
+-- TIDAK cocok dengan basis data yang berjalan.
+-- ============================================================
+
 -- Kalender multi-profil (fix grants + RLS)
 create table if not exists cal_profiles (
   id uuid primary key default gen_random_uuid(),
