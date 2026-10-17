@@ -38,7 +38,7 @@ Alur data:
 
 - `index.html` — antarmuka + pemuat pustaka Supabase (CDN ganda + fallback visual) + panel error.
 - `app.js` — logika kalender, lapisan sinkron Supabase, sistem log visual.
-- `holidays.json` — hari libur nasional (basis tahun 2026).
+- `holidays.json` — hari libur nasional + cuti bersama 2026, disalin dari kalender resmi Indonesia (Google Calendar `id.indonesian#holiday@group.v.calendar.google.com`). Data lama (perkiraan awal) sudah diperbaiki: Isra Mikraj 16 Jan, Nyepi 19 Mar, Idul Fitri 21-22 Mar, Idul Adha 27-28 Mei, Tahun Baru Islam 17 Jun.
 - `hijri.json` — tabel acuan Hijriyah (titik awal bulan).
 - `supabase_schema.sql` — skema resmi tabel Supabase.
 
