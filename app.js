@@ -3,11 +3,13 @@
 /* ================================================================
    1. KONFIGURASI
    ================================================================ */
-const APP_VERSION = 'v26.3';
+const APP_VERSION = 'v27.0';
 const SUPABASE_URL = 'https://eogdtpkiwzlarllnxsrj.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvZ2R0cGtpd3psYXJsbG54c3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODg0NzMsImV4cCI6MjA4OTY2NDQ3M30.eZPbYTuaDerKL9SOEa4ctkxSlU1PiEAU9l42czgYOyI';
 const GCAL_KEY = 'AIzaSyC1l9UXl2evZOf4ZSZMEVeZwfZ4mFK6EW0';
 const GCAL_ID = 'id.indonesian#holiday@group.v.calendar.google.com';
+const MAIN_PROFILE_ID = 'p_default';        // Profil Utama: tidak bisa dihapus
+const DEADLINE_LOOKAHEAD_MONTHS = 6;        // Deadline muncul sekian bulan sebelum jatuh tempo
 
 let supabaseClient = null;
 let syncState = 'loading';        // loading | ok | error | local
@@ -262,6 +264,11 @@ async function sbCall(desc, fn) {
     const res = await fn(supabaseClient);
     if (res && res.error) {
       logErr('Supabase gagal — ' + desc, errText(res.error));
+      const em = String(res.error.message || '') + ' ' + String(res.error.code || '');
+      if (/schema cache|does not exist|PGRST20\d|42703|42P01|22P02/i.test(em)) {
+        logWarn('Skema Supabase tidak cocok dengan aplikasi (kolom/tabel/tipe id).',
+          'Jalankan kalender_schema.sql di SQL Editor Supabase, lalu muat ulang aplikasi.');
+      }
       return { ok: false, offline: false, data: null, error: res.error };
     }
     logOk('Supabase berhasil — ' + desc);
@@ -375,6 +382,9 @@ async function fetchActiveProfileNotes() {
       id: item.id,
       text: item.text,
       tag: item.tag || 'Catatan',
+      done: !!item.done,
+      end_date: item.end_date || null,
+      routine_meta: item.routine_meta || (item.tag === 'Routine' ? {} : null),
       createdAt: item.created_at ? new Date(item.created_at).getTime() : Date.now()
     });
   });
@@ -446,7 +456,8 @@ async function pushLocalDataToSupabase() {
     const rows = [];
     Object.entries(p.notes || {}).forEach(([dateKey, arr]) => {
       (arr || []).forEach(n => rows.push({
-        id: n.id, profile_id: p.id, date_key: dateKey, text: n.text, tag: n.tag || 'Catatan'
+        id: n.id, profile_id: p.id, date_key: dateKey, text: n.text, tag: n.tag || 'Catatan',
+        done: !!n.done, end_date: n.end_date || null, routine_meta: n.routine_meta || null
       }));
     });
     for (let i = 0; i < rows.length; i += 50) {
@@ -623,6 +634,134 @@ async function loadGcalYear(y) {
 /* ================================================================
    5. RENDER KALENDER
    ================================================================ */
+/* ---- util tanggal berbasis kunci 'YYYY-MM-DD' (bebas zona waktu/DST) ---- */
+const pad2 = n => String(n).padStart(2, '0');
+function keyToParts(k) { const a = String(k).split('-'); return [parseInt(a[0], 10), parseInt(a[1], 10), parseInt(a[2], 10)]; }
+function todayKey() { const t = new Date(); return t.getFullYear() + '-' + pad2(t.getMonth() + 1) + '-' + pad2(t.getDate()); }
+function diffDaysKeys(fromKey, toKey) {
+  const a = keyToParts(fromKey), b = keyToParts(toKey);
+  return Math.round((Date.UTC(b[0], b[1] - 1, b[2]) - Date.UTC(a[0], a[1] - 1, a[2])) / 86400000);
+}
+function fmtDayMonth(k, withYear) { const p = keyToParts(k); return p[2] + ' ' + BLN[p[1] - 1] + (withYear ? ' ' + p[0] : ''); }
+function fmtRange(a, b) {
+  if (a === b) return fmtDayMonth(a, false);
+  const p = keyToParts(a), q = keyToParts(b);
+  if (p[0] === q[0] && p[1] === q[1]) return p[2] + '–' + q[2] + ' ' + BLN[p[1] - 1];
+  if (p[0] === q[0]) return p[2] + ' ' + BLN[p[1] - 1] + ' – ' + q[2] + ' ' + BLN[q[1] - 1];
+  return p[2] + ' ' + BLN[p[1] - 1] + ' ' + p[0] + ' – ' + q[2] + ' ' + BLN[q[1] - 1] + ' ' + q[0];
+}
+function deadlineBadge(key) {
+  const diff = diffDaysKeys(todayKey(), key);
+  if (diff > 0) return { text: 'H-' + diff, late: false };
+  if (diff === 0) return { text: 'Hari ini', late: false };
+  return { text: 'Lewat ' + (-diff) + 'h', late: true };
+}
+
+/* ---- aturan Routine: rentang start_date s.d. end_date (tanpa end_date = 1 hari) ---- */
+function routineEnd(n, key) { return n.end_date || key; }
+function inRoutineRange(n, key, dk) { return n.tag === 'Routine' && dk >= key && dk <= routineEnd(n, key); }
+
+function findNote(p, id) {
+  let r = null;
+  Object.entries((p && p.notes) || {}).forEach(([k, arr]) => (arr || []).forEach(n => { if (n.id === id) r = { n: n, key: k }; }));
+  return r;
+}
+
+function notesForDate(p, dateKey) {
+  const out = [];
+  Object.entries((p && p.notes) || {}).forEach(([dKey, arr]) => {
+    (arr || []).forEach(n => {
+      if (dKey === dateKey || inRoutineRange(n, dKey, dateKey)) out.push(n);
+    });
+  });
+  return out;
+}
+
+/* ---- Kotak ringkasan di bawah kalender (urutan & pemisah sesuai spesifikasi) ---- */
+function renderSummary(p, monthHolidays, box) {
+  if (!box) return;
+  const y = state.y, m = state.m;
+  const lastD = new Date(y, m + 1, 0).getDate();
+  const pre = y + '-' + pad2(m + 1) + '-';
+  const monthStart = pre + '01', monthEnd = pre + pad2(lastD);
+  const tk = todayKey();
+  const penting = [], biasa = [], deadline = [], routine = [];
+
+  Object.entries(p.notes || {}).forEach(([key, arr]) => (arr || []).forEach(n => {
+    const tag = n.tag || 'Catatan';
+    if (tag === 'Routine') {
+      const end = routineEnd(n, key);
+      if (key <= monthEnd && end >= monthStart) routine.push({ n: n, key: key, end: end });
+    } else if (tag === 'Deadline') {
+      const kp = keyToParts(key);
+      const gap = (kp[0] * 12 + kp[1] - 1) - (y * 12 + m);   // 0 = bulan ini, >0 = bulan-bulan sebelumnya
+      if (gap >= 0 && gap <= DEADLINE_LOOKAHEAD_MONTHS) deadline.push({ n: n, key: key });
+    } else if (key.indexOf(pre) === 0) {
+      (tag === 'Penting' ? penting : biasa).push({ n: n, key: key });
+    }
+  }));
+  const byDate = (a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : (a.n.createdAt || 0) - (b.n.createdAt || 0);
+  [penting, biasa, deadline, routine].forEach(a => a.sort(byDate));
+
+  const title = (cls, text) => '<div class="info-section-title ' + cls + '"><span>' + text + '</span></div>';
+  const sections = [];
+
+  if (monthHolidays.length) {
+    let h = title('holiday-title-color', 'Libur Nasional &amp; Cuti') + '<ul class="sum-list">';
+    monthHolidays.forEach(x => { h += '<li><span class="date-red">' + x.d + ' ' + BLN[m] + '</span>: ' + escapeHtml(x.desc) + '</li>'; });
+    sections.push({ id: 'libur', html: h + '</ul>' });
+  }
+  if (penting.length) {
+    let h = title('sec-penting', 'Catatan Penting') + '<ul class="sum-list">';
+    penting.forEach(x => { h += '<li><span class="sec-penting" style="font-weight:700">' + fmtDayMonth(x.key, false) + '</span>: ' + escapeHtml(x.n.text) + '</li>'; });
+    sections.push({ id: 'penting', html: h + '</ul>' });
+  }
+  if (biasa.length) {
+    let h = title('sec-biasa', 'Catatan Biasa &amp; Ide') + '<ul class="sum-list">';
+    biasa.forEach(x => {
+      const ide = x.n.tag === 'Ide' ? ' <span class="note-tag-badge badge-ide" style="font-size:.6rem;padding:1px 6px">Ide</span>' : '';
+      h += '<li><span class="sec-biasa" style="font-weight:700">' + fmtDayMonth(x.key, false) + '</span>: ' + escapeHtml(x.n.text) + ide + '</li>';
+    });
+    sections.push({ id: 'biasa', html: h + '</ul>' });
+  }
+  if (deadline.length) {
+    let h = title('sec-deadline', 'Catatan Deadline') + '<ul class="sum-list">';
+    deadline.forEach(x => {
+      const b = deadlineBadge(x.key);
+      h += '<li><span class="sec-deadline" style="font-weight:700">' + fmtDayMonth(x.key, keyToParts(x.key)[0] !== y) + '</span>: ' +
+        escapeHtml(x.n.text) + ' <span class="dl-badge' + (b.late ? ' late' : '') + '">' + b.text + '</span></li>';
+    });
+    sections.push({ id: 'deadline', html: h + '</ul>' });
+  }
+  if (routine.length) {
+    let h = title('sec-routine', 'Catatan Routine') + '<ul class="sum-list">';
+    routine.forEach(x => {
+      // checkbox hanya untuk HARI INI, dan hanya jika hari ini ada di dalam rentang routine
+      let chk = '';
+      if (tk >= x.key && tk <= x.end) {
+        const done = !!(x.n.routine_meta && x.n.routine_meta[tk]);
+        chk = '<input type="checkbox" class="rt-check" ' + (done ? 'checked' : '') +
+          ' onchange="toggleNoteDone(\'' + x.n.id + '\', this.checked, \'' + tk + '\')" /><span class="rt-hint">hari ini</span>';
+      }
+      h += '<li><span class="sec-routine" style="font-weight:700">' + fmtRange(x.key, x.end) + '</span>: ' + escapeHtml(x.n.text) + chk + '</li>';
+    });
+    sections.push({ id: 'routine', html: h + '</ul>' });
+  }
+
+  if (!sections.length) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  let out = '';
+  sections.forEach((s, i) => {
+    if (i > 0) {
+      const prev = sections[i - 1].id;
+      // sesuai spesifikasi: tidak ada garis pemisah antara Deadline dan Routine
+      out += (prev === 'deadline' && s.id === 'routine') ? '<div class="sum-spacer"></div>' : '<div class="info-divider"></div>';
+    }
+    out += s.html;
+  });
+  box.innerHTML = out;
+  box.style.display = 'block';
+}
+
 function render() {
   const head = document.getElementById('big');
   const subh = document.getElementById('small');
@@ -669,9 +808,9 @@ function render() {
     const ps = getPasaran(jdn);
     const isToday = now.getFullYear() === state.y && now.getMonth() === state.m && now.getDate() === d;
     const dateKey = state.y + '-' + String(state.m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-    
+
     // Check if any note on this day is 'Penting'
-    const notesArr = activeProfile.notes[dateKey];
+    const notesArr = notesForDate(activeProfile, dateKey);
     const isPenting = Array.isArray(notesArr) && notesArr.some(n => n.tag === 'Penting');
     const isRoutine = Array.isArray(notesArr) && notesArr.some(n => n.tag === 'Routine');
     const isDeadline = Array.isArray(notesArr) && notesArr.some(n => n.tag === 'Deadline');
@@ -709,160 +848,7 @@ function render() {
   html += '</div>';
   cal.innerHTML = html;
 
-  if (holidayList) {
-    const monthUserNotes = [];
-    // 1. Ambil catatan di bulan aktif
-    for (let d = 1; d <= lastD; d++) {
-      const dateKey = state.y + '-' + String(state.m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-      const notesArr = activeProfile.notes[dateKey];
-      
-      let activeNotes = [];
-      if (Array.isArray(notesArr)) activeNotes.push(...notesArr);
-
-      Object.entries(activeProfile.notes || {}).forEach(([dKey, arr]) => {
-          arr.forEach(n => {
-              if (n.tag === 'Routine' && n.end_date) {
-                  if (dateKey >= dKey && dateKey <= n.end_date) {
-                      if (!activeNotes.some(existing => existing.id === n.id)) {
-                          activeNotes.push(n);
-                      }
-                  }
-              }
-          });
-      });
-
-      if (activeNotes.length > 0) {
-        activeNotes.forEach(n => {
-          const isRoutine = n.tag === 'Routine';
-          const isDone = isRoutine ? (n.routine_meta && n.routine_meta[dateKey]) : false;
-          monthUserNotes.push({ 
-            id: n.id,
-            d: d, 
-            text: n.text, 
-            tag: n.tag || 'Catatan', 
-            dateKey: n.dateKey || dateKey,
-            itemDateKey: dateKey,
-            start_date: n.dateKey || dateKey,
-            end_date: n.end_date,
-            isDone: isDone 
-          });
-        });
-      }
-    }
-
-    // 2. Ambil juga catatan Deadline dari bulan lain yang jatuh tempo di bulan ini atau belum lewat jauh
-    Object.entries(activeProfile.notes || {}).forEach(([dKey, arr]) => {
-        arr.forEach(n => {
-            if (n.tag === 'Deadline') {
-                // Cek apakah tanggal deadline ini di bulan/tahun yang sedang dirender
-                const parts = dKey.split('-');
-                const dYear = parseInt(parts[0], 10);
-                const dMonth = parseInt(parts[1], 10) - 1;
-                const dDay = parseInt(parts[2], 10);
-
-                if (dYear === state.y && dMonth === state.m) {
-                    // Sudah tercover di loop harian di atas
-                    return;
-                }
-
-                // Jika deadline ada di masa depan atau bulan ini, tampilkan sebagai pengingat lintas bulan jika relevan
-                // (Atau jika user membuat deadline untuk bulan depan, tampilkan countdown-nya)
-                // Mari kita masukkan jika dYear === state.y dan dMonth === state.m (jika belum dimasukkan)
-                // Agar aman, cek apakah sudah ada di monthUserNotes
-                const alreadyAdded = monthUserNotes.some(existing => existing.id === n.id);
-                if (!alreadyAdded && dYear === state.y && dMonth === state.m) {
-                    monthUserNotes.push({
-                        id: n.id,
-                        d: dDay,
-                        text: n.text,
-                        tag: 'Deadline',
-                        dateKey: dKey,
-                        itemDateKey: dKey,
-                        isDone: false
-                    });
-                }
-            }
-        });
-    });
-
-    // Urutkan berdasarkan tanggal (d)
-    monthUserNotes.sort((a, b) => a.d - b.d);
-
-    let hasContent = false;
-    let containerHtml = '';
-
-    if (monthHolidays.length > 0) {
-      hasContent = true;
-      containerHtml += '<div class="info-section-title holiday-title-color"><span>Libur Nasional &amp; Cuti</span></div><ul>';
-      monthHolidays.forEach(h => {
-        containerHtml += '<li><span class="date-red">' + h.d + ' ' + BLN[state.m] + '</span>: ' + escapeHtml(h.desc) + '</li>';
-      });
-      containerHtml += '</ul>';
-    }
-
-    if (monthUserNotes.length > 0) {
-      if (hasContent) containerHtml += '<div class="info-divider"></div>';
-      hasContent = true;
-      containerHtml += '<div class="info-section-title user-title-color"><span>Catatan ' + escapeHtml(activeProfile.name) + '</span></div><ul style="list-style:none;padding:0;margin:0">';
-      
-      // Kelompokkan berdasarkan tag untuk divider
-      let currentTag = null;
-      monthUserNotes.forEach((note, idx) => {
-        if (currentTag !== null && currentTag !== note.tag) {
-          containerHtml += '<div style="height:1px;background:var(--border);margin:8px 0"></div>';
-        }
-        currentTag = note.tag;
-
-        let dateClass = 'date-blue';
-        let customStyle = '';
-        if (note.tag === 'Penting') {
-          dateClass = '';
-          customStyle = 'color:#facc15;font-weight:bold';
-        } else if (note.tag === 'Deadline') {
-          dateClass = '';
-          customStyle = 'color:#ef4444;font-weight:bold';
-        } else if (note.tag === 'Ide') {
-          dateClass = '';
-          customStyle = 'color:#d8b4fe;font-weight:bold';
-        } else if (note.tag === 'Routine') {
-          dateClass = '';
-          customStyle = 'color:#5eead4;font-weight:bold';
-        }
-
-        let extraText = '';
-        if (note.tag === 'Deadline') {
-          const now = new Date();
-          const targetParts = note.dateKey.split('-');
-          const targetDate = new Date(parseInt(targetParts[0]), parseInt(targetParts[1])-1, parseInt(targetParts[2]));
-          const diffDays = Math.ceil((targetDate - now) / (1000 * 60 * 60 * 24));
-          if (diffDays >= 0) {
-            extraText = ' <span style="font-size:0.65rem;background:rgba(239,68,68,0.2);color:#fca5a5;padding:1px 4px;border-radius:4px">H-' + diffDays + '</span>';
-          } else {
-            extraText = ' <span style="font-size:0.65rem;background:rgba(239,68,68,0.2);color:#fca5a5;padding:1px 4px;border-radius:4px">Lewat ' + Math.abs(diffDays) + 'h</span>';
-          }
-        } else if (note.tag === 'Routine') {
-          const targetDateKey = note.itemDateKey;
-          const isValidRange = (!note.start_date || targetDateKey >= note.start_date) && (!note.end_date || targetDateKey <= note.end_date);
-          if (isValidRange) {
-            extraText = ' <input type="checkbox" ' + (note.isDone ? 'checked' : '') + ' onclick="selectedDateKey=\'' + targetDateKey + '\'; toggleNoteDone(\'' + note.id + '\', this.checked)" style="width:16px;height:16px;vertical-align:middle;margin-left:6px;cursor:pointer" />';
-          }
-        }
-
-        containerHtml += '<li style="padding:4px 0">' +
-          '<span class="' + dateClass + '" style="' + customStyle + '">' + note.d + ' ' + BLN[state.m] + '</span>: ' + escapeHtml(note.text) + extraText +
-          '</li>';
-      });
-      containerHtml += '</ul>';
-    }
-
-    if (hasContent) {
-      holidayList.innerHTML = containerHtml;
-      holidayList.style.display = 'block';
-    } else {
-      holidayList.innerHTML = '';
-      holidayList.style.display = 'none';
-    }
-  }
+  renderSummary(activeProfile, monthHolidays, holidayList);
 
   renderDrawerQuickProfiles();
 }
@@ -919,32 +905,124 @@ function openDateNotes(dateKey) {
   }
   if (profLabel) profLabel.textContent = p.name;
 
-  setNoteFormStatus('');
+  cancelEdit();
   renderNotesList();
   openModal('modal-date-notes');
 }
 
-async function handleEditNote(noteId) {
-    const p = getActiveProfile();
-    let note = null;
-    Object.values(p.notes || {}).forEach(arr => {
-        const found = arr.find(n => n.id === noteId);
-        if (found) note = found;
-    });
-    if (!note) return;
+let editingNote = null;   // { id, key } saat form dipakai untuk mengedit
 
-    const newText = prompt('Edit teks catatan:', note.text);
-    if (newText === null) return;
-    
-    note.text = newText;
+function setCategory(cat) {
+  const hid = document.getElementById('selected-note-tag');
+  if (hid) hid.value = cat;
+  document.querySelectorAll('.btn-category').forEach(b => b.classList.toggle('active', b.textContent.trim() === cat));
+  const box = document.getElementById('routine-input-container');
+  if (box) box.style.display = (cat === 'Routine') ? 'block' : 'none';
+  if (cat === 'Routine') {
+    const inp = document.getElementById('input-routine-end-date');
+    const startKey = editingNote ? editingNote.key : selectedDateKey;
+    if (inp && startKey) inp.min = startKey;
+  }
+}
+function selectCategory(cat) { setCategory(cat); }
+
+function resetNoteForm() {
+  editingNote = null;
+  const end = document.getElementById('input-routine-end-date');
+  if (end) { end.value = ''; end.removeAttribute('min'); }
+  setCategory('Catatan');
+  const save = document.getElementById('btn-save-note');
+  if (save) save.textContent = '+ Simpan';
+  const cancel = document.getElementById('btn-cancel-edit');
+  if (cancel) cancel.style.display = 'none';
+}
+
+function cancelEdit() {
+  const wasEditing = !!editingNote;
+  resetNoteForm();
+  if (wasEditing) { const i = document.getElementById('input-note-text'); if (i) i.value = ''; }
+  setNoteFormStatus('');
+}
+
+function startEditNote(noteId) {
+  const p = getActiveProfile();
+  const f = findNote(p, noteId);
+  if (!f) return;
+  editingNote = { id: noteId, key: f.key };
+  const input = document.getElementById('input-note-text');
+  if (input) input.value = f.n.text;
+  setCategory(f.n.tag || 'Catatan');
+  const end = document.getElementById('input-routine-end-date');
+  if (end) end.value = (f.n.tag === 'Routine' && f.n.end_date) ? f.n.end_date : '';
+
+  const save = document.getElementById('btn-save-note');
+  if (save) {
+    save.textContent = 'Simpan Perubahan';
+    let cancel = document.getElementById('btn-cancel-edit');
+    if (!cancel) {
+      cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.id = 'btn-cancel-edit';
+      cancel.className = 'btn-secondary';
+      cancel.textContent = 'Batal';
+      cancel.onclick = cancelEdit;
+      save.parentNode.insertBefore(cancel, save);
+    }
+    cancel.style.display = '';
+  }
+  setNoteFormStatus('Mengedit catatan — ubah teks atau kategori, lalu simpan.');
+  if (input) input.focus();
+}
+function handleEditNote(noteId) { startEditNote(noteId); }
+
+async function saveEditedNote() {
+  const ed = editingNote;
+  if (!ed) return;
+  const p = getActiveProfile();
+  const f = findNote(p, ed.id);
+  if (!f) { cancelEdit(); return; }
+  const input = document.getElementById('input-note-text');
+  const newText = input ? input.value.trim() : '';
+  if (!newText) { setNoteFormStatus('Catatan masih kosong.'); return; }
+  const hid = document.getElementById('selected-note-tag');
+  const tag = (hid && hid.value) || 'Catatan';
+  const endEl = document.getElementById('input-routine-end-date');
+  const endVal = endEl && endEl.value ? endEl.value : null;
+  if (tag === 'Routine') {
+    if (!endVal) { setNoteFormStatus('Routine butuh Tanggal Selesai (End Date).'); return; }
+    if (endVal < f.key) { setNoteFormStatus('Tanggal selesai tidak boleh sebelum tanggal mulai.'); return; }
+  }
+
+  const n = f.n;
+  const backup = { text: n.text, tag: n.tag, end_date: n.end_date, routine_meta: n.routine_meta };
+  n.text = newText;
+  n.tag = tag;
+  n.end_date = (tag === 'Routine') ? endVal : null;
+  n.routine_meta = (tag === 'Routine') ? (n.routine_meta || {}) : null;
+
+  resetNoteForm();
+  if (input) input.value = '';
+  renderNotesList();
+  render();
+
+  if (!supabaseClient) {
+    saveLocalCache();
+    setNoteFormStatus('Perubahan tersimpan di HP saja (mode lokal).');
+    return;
+  }
+  const r = await sbCall('ubah catatan (' + f.key + ')', c =>
+    c.from('cal_items').update({ text: n.text, tag: n.tag, end_date: n.end_date, routine_meta: n.routine_meta }).eq('id', n.id));
+  if (!r.ok) {
+    Object.assign(n, backup);
     renderNotesList();
     render();
-
-    if (supabaseClient) {
-        await sbCall('update catatan "' + noteId + '"', c =>
-            c.from('cal_items').update({ text: newText }).eq('id', noteId));
-    }
-    saveLocalCache();
+    setNoteFormStatus('GAGAL menyimpan perubahan ke cloud — dikembalikan. Lihat panel error.');
+    return;
+  }
+  saveLocalCache();
+  setSync('ok');
+  setNoteFormStatus('Perubahan tersimpan ✓');
+  setTimeout(() => setNoteFormStatus(''), 2500);
 }
 
 function getBadgeClass(tag) {
@@ -962,61 +1040,54 @@ function renderNotesList() {
   const container = document.getElementById('note-items-container');
   if (!container || !selectedDateKey) return;
   const p = getActiveProfile();
-  
-  // Ambil semua note dan cari yang relevan (termasuk Routine yang sedang aktif)
-  let notes = [];
-  Object.entries(p.notes || {}).forEach(([dKey, arr]) => {
-      arr.forEach(n => {
-          if (n.tag === 'Routine' && n.end_date) {
-              if (selectedDateKey >= dKey && selectedDateKey <= n.end_date) {
-                  notes.push(n);
-              }
-          } else if (dKey === selectedDateKey) {
-              notes.push(n);
-          }
-      });
-  });
+  const dk = selectedDateKey;
 
-  if (notes.length === 0) {
+  const rows = [];
+  Object.entries(p.notes || {}).forEach(([key, arr]) => (arr || []).forEach(n => {
+    if (key === dk || inRoutineRange(n, key, dk)) rows.push({ n: n, key: key });
+  }));
+  // Penting selalu ter-pin di atas, sisanya urut waktu dibuat
+  rows.sort((a, b) => ((b.n.tag === 'Penting') - (a.n.tag === 'Penting')) || ((a.n.createdAt || 0) - (b.n.createdAt || 0)));
+
+  if (!rows.length) {
     container.innerHTML = '<div class="empty-notes-hint">Belum ada catatan pada tanggal ini di ' + escapeHtml(p.name) + '.<br>Gunakan form di bawah untuk menambahkan.</div>';
     return;
   }
 
   let html = '';
-  notes.forEach(note => {
-    const isRoutine = note.tag === 'Routine';
-    const isDone = isRoutine ? (note.routine_meta && note.routine_meta[selectedDateKey]) : false;
-    const checkedAttr = isDone ? 'checked' : '';
-    
-    // Checkbox hanya untuk Routine
-    const checkboxHtml = isRoutine 
-      ? '<input type="checkbox" ' + checkedAttr + ' onchange="toggleNoteDone(\'' + note.id + '\', this.checked)" style="width:18px;height:18px;cursor:pointer" />' 
+  rows.forEach(({ n, key }) => {
+    const tag = n.tag || 'Catatan';
+    const isRoutine = tag === 'Routine';
+    // Checkbox HANYA untuk Routine dan HANYA jika tanggal yang dibuka ada di dalam rentangnya
+    const showCheck = isRoutine && inRoutineRange(n, key, dk);
+    const isDone = showCheck && !!(n.routine_meta && n.routine_meta[dk]);
+    const checkbox = showCheck
+      ? '<input type="checkbox" ' + (isDone ? 'checked' : '') + ' onchange="toggleNoteDone(\'' + n.id + '\', this.checked, \'' + dk + '\')" style="width:18px;height:18px;cursor:pointer;accent-color:var(--c-routine);flex-shrink:0" />'
       : '';
-      
-    const textStyle = isRoutine && isDone ? 'text-decoration:line-through;opacity:0.6' : '';
-    
-    html += '<div class="note-item">' +
+    const textStyle = isDone ? 'text-decoration:line-through;opacity:0.6' : '';
+
+    let meta = '<span class="note-tag-badge ' + getBadgeClass(tag) + '">' + escapeHtml(tag) + '</span>';
+    if (isRoutine) meta += '<span style="font-size:0.65rem;color:var(--sub)">' + fmtRange(key, routineEnd(n, key)) + '</span>';
+    if (tag === 'Deadline') { const b = deadlineBadge(key); meta += '<span class="dl-badge' + (b.late ? ' late' : '') + '">' + b.text + '</span>'; }
+
+    html += '<div class="note-item' + (tag === 'Penting' ? ' is-penting' : '') + '">' +
       '<div class="note-item-left">' +
-      '<div style="display:flex;align-items:center;gap:8px">' +
-      checkboxHtml +
-      '<span class="note-item-text" style="' + textStyle + '">' + escapeHtml(note.text) + '</span>' +
+        '<div style="display:flex;align-items:center;gap:8px">' + checkbox +
+          '<span class="note-item-text" style="' + textStyle + '">' + escapeHtml(n.text) + '</span></div>' +
+        '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' + meta + '</div>' +
       '</div>' +
-      '<div style="display:flex;gap:6px;align-items:center">' +
-      '<span class="note-tag-badge ' + getBadgeClass(note.tag) + '">' + escapeHtml(note.tag || 'Catatan') + '</span>' +
-      (isRoutine && note.end_date ? '<span style="font-size:0.65rem;color:var(--sub)">Routine s/d ' + note.end_date + '</span>' : '') +
+      '<div class="note-item-actions">' +
+        '<button class="btn-secondary" onclick="handleEditNote(\'' + n.id + '\')" title="Edit catatan">Edit</button>' +
+        '<button class="btn-danger" onclick="handleDeleteNote(\'' + n.id + '\')" title="Hapus catatan">Hapus</button>' +
       '</div>' +
-      '</div>' +
-      '<div style="display:flex;gap:4px">' +
-      '<button class="btn-secondary" onclick="handleEditNote(\'' + note.id + '\')" title="Edit catatan" style="font-size:0.7rem;padding:4px 8px">Edit</button>' +
-      '<button class="btn-danger" onclick="handleDeleteNote(\'' + note.id + '\')" title="Hapus catatan" style="font-size:0.7rem;padding:4px 8px">Hapus</button>' +
-      '</div>' +
-      '</div>';
+    '</div>';
   });
   container.innerHTML = html;
 }
 
 async function handleAddNote(e) {
   e.preventDefault();
+  if (editingNote) { return saveEditedNote(); }
   const input = document.getElementById('input-note-text');
   const tagSelect = document.getElementById('select-note-tag');
   const btn = document.getElementById('btn-save-note');
@@ -1026,9 +1097,13 @@ async function handleAddNote(e) {
   if (!text) { setNoteFormStatus('Catatan masih kosong.'); return; }
 
   const tag = document.getElementById('selected-note-tag') ? document.getElementById('selected-note-tag').value : 'Catatan';
-  const routineEndDate = document.getElementById('input-routine-end-date') ? document.getElementById('input-routine-end-date').value : null;
+  const routineEndDate = document.getElementById('input-routine-end-date') ? document.getElementById('input-routine-end-date').value || null : null;
   const p = getActiveProfile();
   const dateKey = selectedDateKey;
+  if (tag === 'Routine') {
+    if (!routineEndDate) { setNoteFormStatus('Routine butuh Tanggal Selesai (End Date).'); return; }
+    if (routineEndDate < dateKey) { setNoteFormStatus('Tanggal selesai tidak boleh sebelum tanggal mulai.'); return; }
+  }
   const noteId = 'item_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
   const newNote = { 
     id: noteId, 
@@ -1045,6 +1120,7 @@ async function handleAddNote(e) {
 
   // Tampilkan dulu (optimistic UI), lalu simpan ke server
   input.value = '';
+  resetNoteForm();
   setNoteFormStatus('Menyimpan ke Supabase…');
   if (btn) btn.disabled = true;
   renderNotesList();
@@ -1069,7 +1145,7 @@ async function handleAddNote(e) {
       end_date: newNote.end_date,
       routine_meta: newNote.routine_meta
   };
-    
+
   await ensureProfileOnServer(p);
   const r = await sbCall('simpan catatan "' + text.slice(0, 24) + '" (' + dateKey + ')', c =>
       c.from('cal_items').insert([itemData]));
@@ -1081,6 +1157,8 @@ async function handleAddNote(e) {
     renderNotesList();
     render();
     input.value = text;
+    setCategory(tag);
+    const endBack = document.getElementById('input-routine-end-date'); if (endBack && routineEndDate) endBack.value = routineEndDate;
     setNoteFormStatus('GAGAL disimpan ke cloud. Pesan error ada di panel merah bawah layar.');
     if (btn) btn.disabled = false;
     return;
@@ -1093,67 +1171,49 @@ async function handleAddNote(e) {
   setTimeout(() => setNoteFormStatus(''), 2500);
 }
 
-function selectCategory(cat) {
-    const btns = document.querySelectorAll('.btn-category');
-    btns.forEach(b => b.classList.remove('active'));
-    event.target.classList.add('active');
-    document.getElementById('selected-note-tag').value = cat;
-    
-    const container = document.getElementById('routine-input-container');
-    container.style.display = (cat === 'Routine') ? 'block' : 'none';
-}
+async function toggleNoteDone(noteId, isDone, dateKeyOverride) {
+  const dk = dateKeyOverride || selectedDateKey;
+  if (!dk) return;
+  const p = getActiveProfile();
+  const f = findNote(p, noteId);
+  if (!f) return;
+  const note = f.n;
+  if (note.tag !== 'Routine') return;                       // hanya Routine yang punya checkbox
+  if (!inRoutineRange(note, f.key, dk)) {                   // aturan ketat: di luar rentang = tolak
+    renderNotesList(); render();
+    return;
+  }
 
-async function toggleNoteDone(noteId, isDone) {
-    if (!selectedDateKey) return;
-    const p = getActiveProfile();
-    let note = null;
-    Object.values(p.notes || {}).forEach(arr => {
-        const found = arr.find(n => n.id === noteId);
-        if (found) note = found;
-    });
-    if (!note) return;
+  // Checkbox bersifat HARIAN: setiap tanggal punya status sendiri di routine_meta[tanggal]
+  if (!note.routine_meta) note.routine_meta = {};
+  const prev = !!note.routine_meta[dk];
+  if (isDone) note.routine_meta[dk] = true; else delete note.routine_meta[dk];
+  renderNotesList(); render();
 
-    if (note.tag === 'Routine') {
-        if (!note.routine_meta) note.routine_meta = {};
-        note.routine_meta[selectedDateKey] = isDone;
-    } else {
-        note.done = isDone;
-    }
-    
-    renderNotesList();
-    render();
+  if (!supabaseClient) { saveLocalCache(); return; }
 
-    if (!supabaseClient) {
-        saveLocalCache();
-        return;
-    }
-
-    const updateData = (note.tag === 'Routine') ? { routine_meta: note.routine_meta } : { done: isDone };
-    const r = await sbCall('update status "' + note.text.slice(0, 10) + '"', c =>
-        c.from('cal_items').update(updateData).eq('id', noteId));
-
-    if (!r.ok) {
-        // Rollback
-        if (note.tag === 'Routine') {
-            note.routine_meta[selectedDateKey] = !isDone;
-        } else {
-            note.done = !isDone;
-        }
-        renderNotesList();
-        render();
-        setNoteFormStatus('Gagal update status di cloud.');
-    } else {
-        saveLocalCache();
-        setSync('ok');
-    }
+  const meta = note.routine_meta;
+  const r = await sbCall('update centang routine "' + note.text.slice(0, 16) + '" (' + dk + ')', c =>
+    c.from('cal_items').update({ routine_meta: meta }).eq('id', noteId));
+  if (!r.ok) {
+    if (prev) note.routine_meta[dk] = true; else delete note.routine_meta[dk];
+    renderNotesList(); render();
+    setNoteFormStatus('Gagal update centang di cloud.');
+  } else {
+    saveLocalCache();
+    setSync('ok');
+  }
 }
 
 async function handleDeleteNote(noteId) {
   const p = getActiveProfile();
-  const dateKey = selectedDateKey;
-  const arr = (p.notes && p.notes[dateKey]) || [];
-  const removed = arr.find(n => n.id === noteId);
+  let dateKey = null, removed = null;
+  Object.entries(p.notes || {}).forEach(([k, list]) => {
+    const f = (list || []).find(n => n.id === noteId);
+    if (f) { dateKey = k; removed = f; }
+  });
   if (!removed) return;
+  const arr = p.notes[dateKey];
 
   p.notes[dateKey] = arr.filter(n => n.id !== noteId);
   if (p.notes[dateKey].length === 0) delete p.notes[dateKey];
@@ -1243,11 +1303,12 @@ function renderManageProfiles() {
   if (!container) return;
   let html = '';
   appData.profiles.forEach(p => {
-    const isOnly = appData.profiles.length <= 1;
+    const isOnly = appData.profiles.length <= 1 || p.id === MAIN_PROFILE_ID;
     html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px">' +
       '<div style="display:flex;align-items:center;gap:8px">' +
       '<span class="chip-dot" style="background:' + (p.color || '#60a5fa') + '"></span>' +
       '<span style="font-weight:600">' + escapeHtml(p.name) + '</span>' +
+      (p.id === MAIN_PROFILE_ID ? '<span style="font-size:0.6rem;color:var(--profile-color);border:1px solid var(--profile-color);border-radius:4px;padding:0 5px">Utama</span>' : '') +
       '<span style="font-size:0.65rem;color:var(--sub)">' + noteCountOf(p) + ' ctt' + (p.synced ? ' • ☁️' : ' • ⚠️ lokal') + '</span>' +
       '</div>' +
       '<div style="display:flex;gap:6px">' +
@@ -1340,6 +1401,10 @@ async function promptRenameProfile(id) {
 }
 
 async function handleDeleteProfile(id) {
+  if (id === MAIN_PROFILE_ID) {
+    alert('Profil Utama tidak bisa dihapus.');
+    return;
+  }
   if (appData.profiles.length <= 1) {
     alert('Tidak bisa menghapus profil terakhir.');
     return;
