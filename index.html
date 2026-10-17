@@ -442,24 +442,27 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
 
     <!-- Form Tambah Catatan Baru -->
     <form id="form-add-note" onsubmit="handleAddNote(event)" style="display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--border);padding-top:10px">
-      <div class="form-group">
-        <input class="form-input" id="input-note-text" placeholder="Tulis catatan untuk tanggal ini..." required autocomplete="off" />
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="form-input" id="input-note-text" placeholder="Tulis catatan untuk tanggal ini..." required autocomplete="off" style="flex:1" />
+        <input type="hidden" id="selected-note-tag" value="Catatan" />
+        <button type="submit" class="btn-primary" id="btn-save-note">+ Simpan</button>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;overflow-x:auto;padding-bottom:5px;scrollbar-width:none">
+
+      <!-- Redesigned Horizontal Category Buttons -->
+      <div style="display:flex;gap:6px;align-items:center;overflow-x:auto;padding-bottom:4px;scrollbar-width:none">
+        <span style="font-size:0.75rem;color:var(--sub);white-space:nowrap">Kategori:</span>
         <button type="button" class="btn-category active" onclick="selectCategory('Catatan')">Catatan</button>
         <button type="button" class="btn-category" onclick="selectCategory('Penting')">Penting</button>
         <button type="button" class="btn-category" onclick="selectCategory('Ide')">Ide</button>
         <button type="button" class="btn-category" onclick="selectCategory('Deadline')">Deadline</button>
         <button type="button" class="btn-category" onclick="selectCategory('Routine')">Routine</button>
       </div>
-      <div id="routine-input-container" style="display:none;margin-bottom:8px">
-          <input class="form-input" id="input-routine-freq" type="number" placeholder="Frekuensi hari rutin..." />
+
+      <!-- Routine Frequency Input Container (shown dynamically when Routine is selected) -->
+      <div id="routine-input-container" style="display:none">
+        <input class="form-input" id="input-routine-freq" type="number" placeholder="Frekuensi pengulangan (hari)..." min="1" />
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input class="form-input" id="input-note-text" placeholder="Tulis catatan untuk tanggal ini..." required autocomplete="off" />
-        <input type="hidden" id="selected-note-tag" value="Catatan" />
-        <button type="submit" class="btn-primary" id="btn-save-note">+ Simpan</button>
-      </div>
+
       <div id="note-form-status" style="font-size:0.72rem;color:var(--sub)"></div>
     </form>
   </div>
