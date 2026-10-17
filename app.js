@@ -715,7 +715,18 @@ function render() {
       const dateKey = state.y + '-' + String(state.m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
       const notesArr = activeProfile.notes[dateKey];
       if (Array.isArray(notesArr) && notesArr.length > 0) {
-        notesArr.forEach(n => monthUserNotes.push({ d: d, text: n.text, tag: n.tag || 'Catatan' }));
+        notesArr.forEach(n => {
+          const isRoutine = n.tag === 'Routine';
+          const isDone = isRoutine ? (n.routine_meta && n.routine_meta[dateKey]) : false;
+          monthUserNotes.push({ 
+            id: n.id,
+            d: d, 
+            text: n.text, 
+            tag: n.tag || 'Catatan', 
+            dateKey: dateKey,
+            isDone: isDone 
+          });
+        });
       }
     }
 
@@ -734,23 +745,47 @@ function render() {
     if (monthUserNotes.length > 0) {
       if (hasContent) containerHtml += '<div class="info-divider"></div>';
       hasContent = true;
-      containerHtml += '<div class="info-section-title user-title-color"><span>Catatan ' + escapeHtml(activeProfile.name) + '</span></div><ul>';
+      containerHtml += '<div class="info-section-title user-title-color"><span>Catatan ' + escapeHtml(activeProfile.name) + '</span></div><ul style="list-style:none;padding:0;margin:0">';
       
-      monthUserNotes.forEach(note => {
-        let tagBadgeClass = 'badge-catatan';
-        if (note.tag === 'Penting') tagBadgeClass = 'badge-penting';
-        else if (note.tag === 'Ide') tagBadgeClass = 'badge-ide';
-        else if (note.tag === 'Deadline') tagBadgeClass = 'badge-deadline';
-        else if (note.tag === 'Routine') tagBadgeClass = 'badge-routine';
-
-        let countdownHtml = '';
-        if (note.tag === 'Deadline' && note.dateKey) {
-            // hitung selisih hari jika ada target
+      monthUserNotes.forEach((note, idx) => {
+        if (idx > 0) {
+          containerHtml += '<div style="height:1px;background:var(--border);margin:6px 0"></div>';
         }
 
-        containerHtml += '<li>' +
-          '<span class="note-tag-badge ' + tagBadgeClass + '" style="margin-right:6px;padding:1px 6px;font-size:0.65rem">' + escapeHtml(note.tag || 'Catatan') + '</span>' +
-          '<span class="date-blue">' + note.d + ' ' + BLN[state.m] + '</span>: ' + escapeHtml(note.text) +
+        let dateClass = 'date-blue';
+        let customStyle = '';
+        if (note.tag === 'Penting') {
+          dateClass = '';
+          customStyle = 'color:#facc15;font-weight:bold';
+        } else if (note.tag === 'Deadline') {
+          dateClass = '';
+          customStyle = 'color:#ef4444;font-weight:bold';
+        } else if (note.tag === 'Ide') {
+          dateClass = '';
+          customStyle = 'color:#d8b4fe;font-weight:bold';
+        } else if (note.tag === 'Routine') {
+          dateClass = '';
+          customStyle = 'color:#5eead4;font-weight:bold';
+        }
+
+        let extraText = '';
+        if (note.tag === 'Deadline') {
+          // Hitung countdown hari
+          const now = new Date();
+          const targetParts = note.dateKey.split('-');
+          const targetDate = new Date(parseInt(targetParts[0]), parseInt(targetParts[1])-1, parseInt(targetParts[2]));
+          const diffDays = Math.ceil((targetDate - now) / (1000 * 60 * 60 * 24));
+          if (diffDays >= 0) {
+            extraText = ' <span style="font-size:0.65rem;background:rgba(239,68,68,0.2);color:#fca5v5;padding:1px 4px;border-radius:4px">H-' + diffDays + '</span>';
+          } else {
+            extraText = ' <span style="font-size:0.65rem;background:rgba(239,68,68,0.2);color:#fca5v5;padding:1px 4px;border-radius:4px">Lewat ' + Math.abs(diffDays) + 'h</span>';
+          }
+        } else if (note.tag === 'Routine') {
+          extraText = ' <input type="checkbox" ' + (note.isDone ? 'checked' : '') + ' onclick="toggleNoteFromSummary(\'' + note.id + '\', \'' + note.dateKey + '\', this.checked)" style="width:16px;height:16px;vertical-align:middle;margin-left:6px;cursor:pointer" />';
+        }
+
+        containerHtml += '<li style="padding:4px 0">' +
+          '<span class="' + dateClass + '" style="' + customStyle + '">' + note.d + ' ' + BLN[state.m] + '</span>: ' + escapeHtml(note.text) + extraText +
           '</li>';
       });
       containerHtml += '</ul>';
