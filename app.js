@@ -3,7 +3,7 @@
 /* ================================================================
    1. KONFIGURASI
    ================================================================ */
-const APP_VERSION = 'v25';
+const APP_VERSION = 'v26.3';
 const SUPABASE_URL = 'https://eogdtpkiwzlarllnxsrj.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvZ2R0cGtpd3psYXJsbG54c3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODg0NzMsImV4cCI6MjA4OTY2NDQ3M30.eZPbYTuaDerKL9SOEa4ctkxSlU1PiEAU9l42czgYOyI';
 const GCAL_KEY = 'AIzaSyC1l9UXl2evZOf4ZSZMEVeZwfZ4mFK6EW0';
@@ -795,11 +795,47 @@ function openDateNotes(dateKey) {
   openModal('modal-date-notes');
 }
 
+async function handleEditNote(noteId) {
+    const p = getActiveProfile();
+    let note = null;
+    Object.values(p.notes || {}).forEach(arr => {
+        const found = arr.find(n => n.id === noteId);
+        if (found) note = found;
+    });
+    if (!note) return;
+
+    const newText = prompt('Edit teks catatan:', note.text);
+    if (newText === null) return;
+    
+    note.text = newText;
+    renderNotesList();
+    render();
+
+    if (supabaseClient) {
+        await sbCall('update catatan "' + noteId + '"', c =>
+            c.from('cal_items').update({ text: newText }).eq('id', noteId));
+    }
+    saveLocalCache();
+}
+
 function renderNotesList() {
   const container = document.getElementById('note-items-container');
   if (!container || !selectedDateKey) return;
   const p = getActiveProfile();
-  const notes = (p.notes && p.notes[selectedDateKey]) || [];
+  
+  // Ambil semua note dan cari yang relevan (termasuk Routine yang sedang aktif)
+  let notes = [];
+  Object.entries(p.notes || {}).forEach(([dKey, arr]) => {
+      arr.forEach(n => {
+          if (n.tag === 'Routine' && n.end_date) {
+              if (selectedDateKey >= dKey && selectedDateKey <= n.end_date) {
+                  notes.push(n);
+              }
+          } else if (dKey === selectedDateKey) {
+              notes.push(n);
+          }
+      });
+  });
 
   if (notes.length === 0) {
     container.innerHTML = '<div class="empty-notes-hint">Belum ada catatan pada tanggal ini di ' + escapeHtml(p.name) + '.<br>Gunakan form di bawah untuk menambahkan.</div>';
@@ -809,20 +845,24 @@ function renderNotesList() {
   let html = '';
   notes.forEach(note => {
     const isRoutine = note.tag === 'Routine';
-    const checkedAttr = note.done ? 'checked' : '';
+    const isDone = isRoutine ? (note.routine_meta && note.routine_meta[selectedDateKey]) : note.done;
+    const checkedAttr = isDone ? 'checked' : '';
     
     html += '<div class="note-item">' +
       '<div class="note-item-left">' +
       '<div style="display:flex;align-items:center;gap:8px">' +
-      (isRoutine ? '<input type="checkbox" ' + checkedAttr + ' onchange="toggleNoteDone(\'' + note.id + '\', this.checked)" style="width:18px;height:18px;cursor:pointer" />' : '') +
-      '<span class="note-item-text" style="' + (note.done ? 'text-decoration:line-through;opacity:0.6' : '') + '">' + escapeHtml(note.text) + '</span>' +
+      '<input type="checkbox" ' + checkedAttr + ' onchange="toggleNoteDone(\'' + note.id + '\', this.checked)" style="width:18px;height:18px;cursor:pointer" />' +
+      '<span class="note-item-text" style="' + (isDone ? 'text-decoration:line-through;opacity:0.6' : '') + '">' + escapeHtml(note.text) + '</span>' +
       '</div>' +
       '<div style="display:flex;gap:6px;align-items:center">' +
       '<span class="note-tag-badge">' + escapeHtml(note.tag || 'Catatan') + '</span>' +
-      (note.routine_frequency ? '<span style="font-size:0.65rem;color:var(--sub)">Setiap ' + note.routine_frequency + ' hari</span>' : '') +
+      (isRoutine && note.end_date ? '<span style="font-size:0.65rem;color:var(--sub)">Routine s/d ' + note.end_date + '</span>' : '') +
       '</div>' +
       '</div>' +
-      '<button class="btn-danger" onclick="handleDeleteNote(\'' + note.id + '\')" title="Hapus catatan">Hapus</button>' +
+      '<div style="display:flex;gap:4px">' +
+      '<button class="btn-secondary" onclick="handleEditNote(\'' + note.id + '\')" title="Edit catatan" style="font-size:0.7rem;padding:4px 8px">Edit</button>' +
+      '<button class="btn-danger" onclick="handleDeleteNote(\'' + note.id + '\')" title="Hapus catatan" style="font-size:0.7rem;padding:4px 8px">Hapus</button>' +
+      '</div>' +
       '</div>';
   });
   container.innerHTML = html;
@@ -839,11 +879,18 @@ async function handleAddNote(e) {
   if (!text) { setNoteFormStatus('Catatan masih kosong.'); return; }
 
   const tag = document.getElementById('selected-note-tag') ? document.getElementById('selected-note-tag').value : 'Catatan';
-  const routineFreq = document.getElementById('input-routine-freq') ? parseInt(document.getElementById('input-routine-freq').value) || 0 : 0;
+  const routineEndDate = document.getElementById('input-routine-end-date') ? document.getElementById('input-routine-end-date').value : null;
   const p = getActiveProfile();
   const dateKey = selectedDateKey;
   const noteId = 'item_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-  const newNote = { id: noteId, text: text, tag: tag, routine_frequency: routineFreq, createdAt: Date.now() };
+  const newNote = { 
+    id: noteId, 
+    text: text, 
+    tag: tag, 
+    end_date: (tag === 'Routine' ? routineEndDate : null), 
+    createdAt: Date.now(),
+    routine_meta: (tag === 'Routine' ? {} : null)
+  };
 
   if (!p.notes) p.notes = {};
   if (!Array.isArray(p.notes[dateKey])) p.notes[dateKey] = [];
@@ -864,23 +911,24 @@ async function handleAddNote(e) {
     return;
   }
 
-    // Tambahkan kolom baru ke data item (v25)
-    const itemData = { 
-        id: noteId, 
-        profile_id: p.id, 
-        date_key: dateKey, 
-        text: text, 
-        tag: tag,
-        done: false,
-        routine_frequency: routineFreq
-    };
+  // Tambahkan data baru (v26)
+  const itemData = { 
+      id: noteId, 
+      profile_id: p.id, 
+      date_key: dateKey, 
+      text: text, 
+      tag: tag,
+      done: false,
+      end_date: newNote.end_date,
+      routine_meta: newNote.routine_meta
+  };
     
-    await ensureProfileOnServer(p);
-    const r = await sbCall('simpan catatan "' + text.slice(0, 24) + '" (' + dateKey + ')', c =>
-        c.from('cal_items').insert([itemData]));
+  await ensureProfileOnServer(p);
+  const r = await sbCall('simpan catatan "' + text.slice(0, 24) + '" (' + dateKey + ')', c =>
+      c.from('cal_items').insert([itemData]));
 
   if (!r.ok) {
-    // Rollback: jangan biarkan catatan tampak tersimpan padahal gagal
+    // Rollback
     p.notes[dateKey] = p.notes[dateKey].filter(n => n.id !== noteId);
     if (p.notes[dateKey].length === 0) delete p.notes[dateKey];
     renderNotesList();
@@ -911,14 +959,20 @@ function selectCategory(cat) {
 async function toggleNoteDone(noteId, isDone) {
     if (!selectedDateKey) return;
     const p = getActiveProfile();
-    const dateKey = selectedDateKey;
-    const notes = (p.notes && p.notes[dateKey]) || [];
-    const note = notes.find(n => n.id === noteId);
+    let note = null;
+    Object.values(p.notes || {}).forEach(arr => {
+        const found = arr.find(n => n.id === noteId);
+        if (found) note = found;
+    });
     if (!note) return;
 
-    // Optimistic UI
-    const oldDone = note.done;
-    note.done = isDone;
+    if (note.tag === 'Routine') {
+        if (!note.routine_meta) note.routine_meta = {};
+        note.routine_meta[selectedDateKey] = isDone;
+    } else {
+        note.done = isDone;
+    }
+    
     renderNotesList();
     render();
 
@@ -927,12 +981,17 @@ async function toggleNoteDone(noteId, isDone) {
         return;
     }
 
-    const r = await sbCall('update status done "' + note.text.slice(0, 20) + '"', c =>
-        c.from('cal_items').update({ done: isDone }).eq('id', noteId));
+    const updateData = (note.tag === 'Routine') ? { routine_meta: note.routine_meta } : { done: isDone };
+    const r = await sbCall('update status "' + note.text.slice(0, 10) + '"', c =>
+        c.from('cal_items').update(updateData).eq('id', noteId));
 
     if (!r.ok) {
         // Rollback
-        note.done = oldDone;
+        if (note.tag === 'Routine') {
+            note.routine_meta[selectedDateKey] = !isDone;
+        } else {
+            note.done = !isDone;
+        }
         renderNotesList();
         render();
         setNoteFormStatus('Gagal update status di cloud.');
