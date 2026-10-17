@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<title>Kalender Canvas v25</title>
+<title>Kalender Canvas v27</title>
 <style>
 :root{
   --bg:#0f172a;--card:#162032;--card-hover:#1e293b;--text:#e2e8f0;--sub:#94a3b8;
   --border:#334155;--border-light:#475569;--blue:#60a5fa;--green:#34d399;--red:#f87171;
   --profile-color:#60a5fa;
+  --c-catatan:#3b9cff;--c-penting:#facc15;--c-ide:#d946ef;--c-deadline:#ff6b3d;--c-routine:#22d3ee;
 }
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;margin:0;padding:12px;display:flex;flex-direction:column;align-items:center;user-select:none;-webkit-user-select:none}
@@ -57,9 +58,10 @@ header{padding:0.6rem 0;display:flex;align-items:center;justify-content:space-be
 /* Days of Week & Grid */
 .dow{display:grid;grid-template-columns:repeat(7,1fr);padding:.5rem 0;font-weight:600;font-size:.75rem;text-align:center}
 .d-blue{color:var(--blue)}.d-green{color:var(--green)}.d-red{color:var(--red)}
-.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:0.25px;background:var(--border);border:1px solid var(--border);touch-action:pan-y}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:0;border-top:1px solid var(--border);border-left:1px solid var(--border);touch-action:pan-y}
 .cell{
   background:var(--card);aspect-ratio:1/1;min-height:0;padding:1px;position:relative;
+  border-right:1px solid var(--border);border-bottom:1px solid var(--border);
   display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:0.75rem;
   cursor:pointer;transition:background 0.1s ease;
 }
@@ -197,17 +199,9 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
 }
 
 /* Date Notes Modal */
-.penting-cell {
-    background: rgba(234, 179, 8, 0.15) !important;
-    border: 1px solid #eab308 !important;
-}
-.note-badge-penting {
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    background: #eab308;
-    border-radius: 50%;
-}
+.penting-cell{background:rgba(250,204,21,0.13);box-shadow:inset 0 0 0 1px rgba(250,204,21,0.75)}
+.penting-cell:not(.holiday-cell) .g{color:var(--c-penting)}
+.note-badge-penting{display:inline-block;width:6px;height:6px;background:var(--c-penting);border-radius:50%;box-shadow:0 0 4px var(--c-penting)}
 .date-notes-header-info{display:flex;flex-direction:column;gap:2px}
 .date-masehi-title{font-size:1.1rem;font-weight:700}
 .date-hijri-pasaran{font-size:0.75rem;color:var(--sub)}
@@ -217,48 +211,47 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
   padding:9px 12px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;
 }
 .note-item-left{display:flex;flex-direction:column;gap:3px;flex-grow:1}
-.btn-category {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: all 0.2s;
+/* Tombol kategori: satu baris horizontal, lima tombol sama lebar */
+.cat-row{display:flex;gap:6px;flex-wrap:nowrap}
+.btn-category{
+  flex:1 1 0;min-width:0;padding:8px 2px;border-radius:999px;font-size:.74rem;font-weight:700;
+  cursor:pointer;background:transparent;border:1.5px solid var(--cat);color:var(--cat);
+  text-align:center;white-space:nowrap;transition:all .15s ease;
 }
-.btn-category:hover, .btn-category.active {
-    background: var(--profile-color);
-    color: white;
-    border-color: var(--profile-color);
-}
+.btn-category:active{transform:scale(.96)}
+.btn-category.active{background:var(--cat);color:#0b1220;box-shadow:0 0 10px var(--cat)}
+.btn-cat-catatan{--cat:var(--c-catatan)}
+.btn-cat-penting{--cat:var(--c-penting)}
+.btn-cat-ide{--cat:var(--c-ide)}
+.btn-cat-deadline{--cat:var(--c-deadline)}
+.btn-cat-routine{--cat:var(--c-routine)}
 
-.btn-cat-catatan { border-color: #3b82f6; color: #60a5fa; }
-.btn-cat-catatan.active { background: #3b82f6; color: white; border-color: #3b82f6; }
-
-.btn-cat-penting { border-color: #eab308; color: #facc15; }
-.btn-cat-penting.active { background: #eab308; color: #111; border-color: #eab308; }
-
-.btn-cat-ide { border-color: #a855f7; color: #d8b4fe; }
-.btn-cat-ide.active { background: #a855f7; color: white; border-color: #a855f7; }
-
-.btn-cat-deadline { border-color: #ef4444; color: #fca5a5; }
-.btn-cat-deadline.active { background: #ef4444; color: white; border-color: #ef4444; }
-
-.btn-cat-routine { border-color: #14b8a6; color: #5eead4; }
-.btn-cat-routine.active { background: #14b8a6; color: white; border-color: #14b8a6; }
-
-/* Category Tag Badges Styles */
-.badge-catatan { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
-.badge-penting { background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.3); }
-.badge-ide { background: rgba(168, 85, 247, 0.15); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.3); }
-.badge-deadline { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
-.badge-routine { background: rgba(20, 184, 166, 0.15); color: #5eead4; border: 1px solid rgba(20, 184, 166, 0.3); }
+/* Lencana kategori */
+.badge-catatan{background:rgba(59,156,255,.16);color:#7cc0ff;border:1px solid rgba(59,156,255,.45)}
+.badge-penting{background:rgba(250,204,21,.16);color:#fde047;border:1px solid rgba(250,204,21,.5)}
+.badge-ide{background:rgba(217,70,239,.16);color:#f0abfc;border:1px solid rgba(217,70,239,.5)}
+.badge-deadline{background:rgba(255,107,61,.16);color:#ff9a76;border:1px solid rgba(255,107,61,.5)}
+.badge-routine{background:rgba(34,211,238,.16);color:#67e8f9;border:1px solid rgba(34,211,238,.5)}
 
 .note-tag-badge{
   align-self:flex-start;font-size:0.65rem;padding:2px 8px;border-radius:4px;
   font-weight:600;
 }
 .empty-notes-hint{font-size:0.8rem;color:var(--sub);text-align:center;padding:18px 0}
+
+/* Item catatan di popup & kotak ringkasan */
+.note-item.is-penting{border-color:rgba(250,204,21,.7)}
+.note-item-actions{display:flex;gap:4px;flex-shrink:0}
+.note-item-actions button{font-size:.7rem;padding:4px 10px}
+.sec-penting{color:var(--c-penting)}.sec-biasa{color:var(--c-catatan)}
+.sec-deadline{color:var(--c-deadline)}.sec-routine{color:var(--c-routine)}
+.info-container .sum-list{list-style:none;padding:0;margin:0;color:var(--text)}
+.sum-list li{padding:3px 0;line-height:1.4}
+.sum-spacer{height:12px}
+.dl-badge{font-size:.65rem;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(255,107,61,.18);color:var(--c-deadline);margin-left:4px;white-space:nowrap}
+.dl-badge.late{background:rgba(148,163,184,.18);color:var(--sub)}
+.rt-check{width:16px;height:16px;vertical-align:middle;margin-left:6px;accent-color:var(--c-routine);cursor:pointer}
+.rt-hint{font-size:.62rem;color:var(--sub);margin-left:2px}
 
 /* Color palettes picker */
 .color-swatches{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0}
@@ -342,7 +335,7 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
 <div id="holiday-list" class="info-container" style="display:none"></div>
 
 <!-- 4. Footer -->
-<footer>Kalender Canvas v25 — Supabase Routine Sync + Category Buttons</footer>
+<footer>Kalender Canvas v27 — Supabase Routine Sync + Category Buttons</footer>
 </div>
 
 <!-- Banner kegagalan pustaka Supabase (dibaca sebelum app.js jalan) -->
@@ -482,7 +475,7 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
       </div>
 
       <!-- Redesigned Horizontal Category Buttons -->
-      <div style="display:flex;gap:6px;align-items:center;overflow-x:auto;padding-bottom:4px;scrollbar-width:none">
+      <div class="cat-row">
         <button type="button" class="btn-category btn-cat-catatan active" onclick="selectCategory('Catatan')">Catatan</button>
         <button type="button" class="btn-category btn-cat-penting" onclick="selectCategory('Penting')">Penting</button>
         <button type="button" class="btn-category btn-cat-ide" onclick="selectCategory('Ide')">Ide</button>
@@ -640,7 +633,7 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
       <button class="close-btn" onclick="closeModal('modal-about')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
     </div>
     <div style="font-size:0.8rem;color:var(--sub);display:flex;flex-direction:column;gap:6px;line-height:1.4">
-      <strong style="color:var(--text);font-size:0.95rem">Kalender Canvas v25</strong>
+      <strong style="color:var(--text);font-size:0.95rem">Kalender Canvas v27</strong>
       <span>Aplikasi Kalender Masehi + Hijriyah + Pasaran Jawa + Canvas Multi-Profil dengan sinkronisasi Supabase.</span>
       <div style="margin-top:6px;padding:8px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
         <span>Tabel cloud: <code>cal_profiles</code> &amp; <code>cal_items</code>.</span><br>
@@ -678,7 +671,7 @@ var __sdkPrimary = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/di
 var __sdkFallback = 'https://unpkg.com/@supabase/supabase-js@2.58.0/dist/umd/supabase.js';
 
 function __bootApp() {
-  __loadScript('app.js?v=30', function () {
+  __loadScript('app.js?v=31', function () {
     window.__APP_BOOT.sdk = (window.supabase && window.supabase.createClient) ? 'siap' : 'siap-tanpa-global';
   }, function () {
     __showSdkBanner('app.js gagal dimuat dari server. Periksa koneksi internet lalu muat ulang halaman.');
