@@ -714,8 +714,25 @@ function render() {
     for (let d = 1; d <= lastD; d++) {
       const dateKey = state.y + '-' + String(state.m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
       const notesArr = activeProfile.notes[dateKey];
-      if (Array.isArray(notesArr) && notesArr.length > 0) {
-        notesArr.forEach(n => {
+      
+      // Ambil juga note Routine aktif yang merentang ke tanggal ini
+      let activeNotes = [];
+      if (Array.isArray(notesArr)) activeNotes.push(...notesArr);
+
+      Object.entries(activeProfile.notes || {}).forEach(([dKey, arr]) => {
+          arr.forEach(n => {
+              if (n.tag === 'Routine' && n.end_date) {
+                  if (dateKey >= dKey && dateKey <= n.end_date) {
+                      if (!activeNotes.some(existing => existing.id === n.id)) {
+                          activeNotes.push(n);
+                      }
+                  }
+              }
+          });
+      });
+
+      if (activeNotes.length > 0) {
+        activeNotes.forEach(n => {
           const isRoutine = n.tag === 'Routine';
           const isDone = isRoutine ? (n.routine_meta && n.routine_meta[dateKey]) : false;
           monthUserNotes.push({ 
@@ -723,7 +740,10 @@ function render() {
             d: d, 
             text: n.text, 
             tag: n.tag || 'Catatan', 
-            dateKey: dateKey,
+            dateKey: n.dateKey || dateKey,
+            itemDateKey: dateKey,
+            start_date: n.dateKey || dateKey,
+            end_date: n.end_date,
             isDone: isDone 
           });
         });
@@ -781,7 +801,14 @@ function render() {
             extraText = ' <span style="font-size:0.65rem;background:rgba(239,68,68,0.2);color:#fca5v5;padding:1px 4px;border-radius:4px">Lewat ' + Math.abs(diffDays) + 'h</span>';
           }
         } else if (note.tag === 'Routine') {
-          extraText = ' <input type="checkbox" ' + (note.isDone ? 'checked' : '') + ' onclick="toggleNoteFromSummary(\'' + note.id + '\', \'' + note.dateKey + '\', this.checked)" style="width:16px;height:16px;vertical-align:middle;margin-left:6px;cursor:pointer" />';
+          // Checkbox hanya muncul jika tanggal saat ini berada dalam rentang start_date dan end_date
+          const currentDKey = note.dateKey; // tanggal di mana note ini terdaftar atau sedang aktif
+          // Untuk ringkasan bulanan, pastikan checkbox merujuk ke tanggal baris catatan tersebut (note.itemDateKey)
+          const targetDateKey = note.itemDateKey || currentDKey;
+          const isValidRange = (!note.start_date || targetDateKey >= note.start_date) && (!note.end_date || targetDateKey <= note.end_date);
+          if (isValidRange) {
+            extraText = ' <input type="checkbox" ' + (note.isDone ? 'checked' : '') + ' onclick="selectedDateKey=\'' + targetDateKey + '\'; toggleNoteDone(\'' + note.id + '\', this.checked)" style="width:16px;height:16px;vertical-align:middle;margin-left:6px;cursor:pointer" />';
+          }
         }
 
         containerHtml += '<li style="padding:4px 0">' +
