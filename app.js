@@ -735,9 +735,23 @@ function render() {
       if (hasContent) containerHtml += '<div class="info-divider"></div>';
       hasContent = true;
       containerHtml += '<div class="info-section-title user-title-color"><span>Catatan ' + escapeHtml(activeProfile.name) + '</span></div><ul>';
+      
       monthUserNotes.forEach(note => {
-        containerHtml += '<li><span class="date-blue">' + note.d + ' ' + BLN[state.m] + '</span>: ' + escapeHtml(note.text) +
-          ' <span style="font-size:0.65rem;color:var(--sub)">[' + escapeHtml(note.tag) + ']</span></li>';
+        let tagBadgeClass = 'badge-catatan';
+        if (note.tag === 'Penting') tagBadgeClass = 'badge-penting';
+        else if (note.tag === 'Ide') tagBadgeClass = 'badge-ide';
+        else if (note.tag === 'Deadline') tagBadgeClass = 'badge-deadline';
+        else if (note.tag === 'Routine') tagBadgeClass = 'badge-routine';
+
+        let countdownHtml = '';
+        if (note.tag === 'Deadline' && note.dateKey) {
+            // hitung selisih hari jika ada target
+        }
+
+        containerHtml += '<li>' +
+          '<span class="note-tag-badge ' + tagBadgeClass + '" style="margin-right:6px;padding:1px 6px;font-size:0.65rem">' + escapeHtml(note.tag || 'Catatan') + '</span>' +
+          '<span class="date-blue">' + note.d + ' ' + BLN[state.m] + '</span>: ' + escapeHtml(note.text) +
+          '</li>';
       });
       containerHtml += '</ul>';
     }
