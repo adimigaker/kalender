@@ -3,12 +3,14 @@
 /* ================================================================
    1. KONFIGURASI
    ================================================================ */
-const APP_VERSION = 'v27.0';
+const APP_VERSION = 'v28.0';
 const SUPABASE_URL = 'https://eogdtpkiwzlarllnxsrj.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvZ2R0cGtpd3psYXJsbG54c3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODg0NzMsImV4cCI6MjA4OTY2NDQ3M30.eZPbYTuaDerKL9SOEa4ctkxSlU1PiEAU9l42czgYOyI';
 const GCAL_KEY = 'AIzaSyC1l9UXl2evZOf4ZSZMEVeZwfZ4mFK6EW0';
 const GCAL_ID = 'id.indonesian#holiday@group.v.calendar.google.com';
-const MAIN_PROFILE_ID = 'p_default';        // Profil Utama: tidak bisa dihapus
+const SESSION_KEY = 'kalender_session';     // { token, mainId, name }
+const CACHE_KEY = 'kalender_canvas_app_data';
+let session = null;                         // sesi login aktif
 const DEADLINE_LOOKAHEAD_MONTHS = 6;        // Deadline muncul sekian bulan sebelum jatuh tempo
 
 let supabaseClient = null;
@@ -228,6 +230,14 @@ function sdkReady() {
   return !!(window.supabase && typeof window.supabase.createClient === 'function');
 }
 
+/* Token sesi dikirim sebagai header x-cal-token pada setiap request (dipakai kebijakan RLS ketat, bila diaktifkan) */
+function makeClient(token) {
+  return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: token ? { 'x-cal-token': token } : {} }
+  });
+}
+
 async function initSupabase() {
   if (!sdkReady()) {
     logWarn('Pustaka Supabase tidak tersedia di halaman ini — berjalan MODE LOKAL.',
@@ -236,9 +246,7 @@ async function initSupabase() {
     return false;
   }
   try {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false }
-    });
+    supabaseClient = makeClient(session ? session.token : null);
     logOk('Klien Supabase dibuat.', SUPABASE_URL);
   } catch (e) {
     logErr('Gagal membuat klien Supabase.', errText(e));
@@ -314,7 +322,11 @@ function loadLocalCache() {
     const raw = localStorage.getItem('kalender_canvas_app_data');
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.profiles) && parsed.profiles.length) {
+      const foreign = parsed && parsed.ownerMainId && session && parsed.ownerMainId !== session.mainId;
+      if (foreign) {
+        logWarn('Cache lokal milik akun lain — dibuang demi privasi.');
+        localStorage.removeItem(CACHE_KEY);
+      } else if (parsed && Array.isArray(parsed.profiles) && parsed.profiles.length) {
         appData.profiles = parsed.profiles;
         appData.activeProfileId = parsed.activeProfileId || parsed.profiles[0].id;
         if (Array.isArray(parsed.tags) && parsed.tags.length) appData.tags = parsed.tags;
@@ -327,6 +339,7 @@ function loadLocalCache() {
   getActiveProfile();
 }
 function saveLocalCache() {
+  if (session) appData.ownerMainId = session.mainId;
   try {
     localStorage.setItem('kalender_canvas_app_data', JSON.stringify(appData));
   } catch (e) {
@@ -336,18 +349,21 @@ function saveLocalCache() {
 
 /* ---- Muat profil dari Supabase (cloud jadi sumber kebenaran) ---- */
 async function loadProfilesFromSupabase() {
+  if (!session || !/^[\w-]+$/.test(session.mainId)) {
+    logWarn('Belum login — daftar profil tidak dimuat.');
+    return false;
+  }
+  const mid = session.mainId;
+  // Kolom dipilih eksplisit: birth_date sengaja TIDAK pernah diminta/dikirim ke aplikasi
   const r = await sbCall('muat daftar profil', c =>
-    c.from('cal_profiles').select('*').order('created_at', { ascending: true }));
+    c.from('cal_profiles').select('id,name,color,created_at,owner_id,type,is_main')
+      .or('id.eq.' + mid + ',owner_id.eq.' + mid).order('created_at', { ascending: true }));
   if (!r.ok) return false;
 
   const rows = r.data || [];
   if (!rows.length) {
-    const p = getActiveProfile();
-    logWarn('Tabel cal_profiles kosong — membuat profil bawaan di server.');
-    const seed = await sbCall('buat profil bawaan', c =>
-      c.from('cal_profiles').upsert([{ id: p.id, name: p.name, color: p.color }], { onConflict: 'id' }));
-    if (seed.ok) p.synced = true;
-    return true;
+    logWarn('Tidak ada profil untuk akun ini di server.', 'Pastikan baris Main Profile memiliki is_main = true.');
+    return false;
   }
 
   const notesById = {};
@@ -358,14 +374,27 @@ async function loadProfilesFromSupabase() {
     name: row.name,
     color: row.color || '#60a5fa',
     notes: notesById[row.id] || {},
-    synced: true
+    synced: true,
+    ownerId: row.owner_id || null,
+    isMain: row.is_main === true || row.type === 'main'
   }));
+  appData.profiles.sort((a, b) => (b.isMain - a.isMain));   // Main Profile selalu pertama
 
   if (!appData.profiles.find(p => p.id === appData.activeProfileId)) {
     appData.activeProfileId = appData.profiles[0].id;
   }
   logInfo('Profil dari server: ' + appData.profiles.length + ' (' + appData.profiles.map(p => p.name).join(', ') + ').');
   return true;
+}
+
+/* Simpan baris profil tanpa upsert: kolom id & birth_date tidak boleh diubah oleh klien */
+async function saveProfileRow(p, desc) {
+  const u = await sbCall(desc + ' (perbarui)', c =>
+    c.from('cal_profiles').update({ name: p.name, color: p.color }).eq('id', p.id).select('id'));
+  if (!u.ok) return u;
+  if (u.data && u.data.length) return u;
+  return sbCall(desc + ' (baru)', c =>
+    c.from('cal_profiles').insert([{ id: p.id, name: p.name, color: p.color, owner_id: session ? session.mainId : null }]));
 }
 
 /* ---- Muat catatan profil aktif ---- */
@@ -430,8 +459,7 @@ async function retrySyncNow() {
 async function ensureProfileOnServer(p) {
   if (!supabaseClient || !p) return false;
   if (p.synced) return true;
-  const r = await sbCall('simpan profil "' + p.name + '" ke server', c =>
-    c.from('cal_profiles').upsert([{ id: p.id, name: p.name, color: p.color }], { onConflict: 'id' }));
+  const r = await saveProfileRow(p, 'simpan profil "' + p.name + '" ke server');
   if (r.ok) p.synced = true;
   return r.ok;
 }
@@ -449,8 +477,7 @@ async function pushLocalDataToSupabase() {
 
   let profilOk = 0, itemOk = 0, itemGagal = 0;
   for (const p of appData.profiles) {
-    const rp = await sbCall('unggah profil "' + p.name + '"', c =>
-      c.from('cal_profiles').upsert([{ id: p.id, name: p.name, color: p.color }], { onConflict: 'id' }));
+    const rp = await saveProfileRow(p, 'unggah profil "' + p.name + '"');
     if (rp.ok) { p.synced = true; profilOk++; } else continue;
 
     const rows = [];
@@ -762,6 +789,8 @@ function renderSummary(p, monthHolidays, box) {
   box.style.display = 'block';
 }
 
+const DOT_TAGS = ['Catatan', 'Penting', 'Ide', 'Deadline', 'Routine'];
+
 function render() {
   const head = document.getElementById('big');
   const subh = document.getElementById('small');
@@ -827,12 +856,15 @@ function render() {
     if (isDeadline) cellCls += ' deadline-cell';
     if (isIde) cellCls += ' ide-cell';
 
-    const hasNotes = Array.isArray(notesArr) && notesArr.length > 0;
+    // Multi-dot: satu titik per kategori yang ada di tanggal ini, warna sesuai kategori
     let dotHtml = '';
-    if (hasNotes) {
-        const isPenting = notesArr.some(n => n.tag === 'Penting');
-        const badgeCls = isPenting ? 'note-badge-penting' : 'note-badge-dot';
-        dotHtml = '<div class="note-indicators"><span class="' + badgeCls + '"></span></div>';
+    if (Array.isArray(notesArr) && notesArr.length) {
+      const present = {};
+      notesArr.forEach(n => { present[DOT_TAGS.indexOf(n.tag) !== -1 ? n.tag : 'Catatan'] = true; });
+      const dots = DOT_TAGS.filter(t => present[t]).map(t =>
+        '<span class="dot dot-' + t.toLowerCase() + '" title="' + t + '" onclick="event.stopPropagation();openDateNotes(\'' + dateKey + '\',\'' + t + '\')"></span>'
+      ).join('');
+      dotHtml = '<div class="note-indicators">' + dots + '</div>';
     }
 
     html += '<div class="' + cellCls + '" onclick="openDateNotes(\'' + dateKey + '\')" title="' + d + ' ' + BLN[state.m] + ' ' + state.y + '">' +
@@ -880,7 +912,7 @@ function setNoteFormStatus(text) {
   if (el) el.textContent = text || '';
 }
 
-function openDateNotes(dateKey) {
+function openDateNotes(dateKey, focusTag) {
   selectedDateKey = dateKey;
   const parts = dateKey.split('-');
   const y = parseInt(parts[0], 10), m = parseInt(parts[1], 10), d = parseInt(parts[2], 10);
@@ -908,6 +940,11 @@ function openDateNotes(dateKey) {
   cancelEdit();
   renderNotesList();
   openModal('modal-date-notes');
+  if (focusTag) {   // ketuk dot -> sorot catatan kategori itu
+    const hits = document.querySelectorAll('#note-items-container .note-item[data-tag="' + focusTag + '"]');
+    hits.forEach(el => { el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); });
+    if (hits[0] && hits[0].scrollIntoView) hits[0].scrollIntoView({ block: 'nearest' });
+  }
 }
 
 let editingNote = null;   // { id, key } saat form dipakai untuk mengedit
@@ -1070,7 +1107,7 @@ function renderNotesList() {
     if (isRoutine) meta += '<span style="font-size:0.65rem;color:var(--sub)">' + fmtRange(key, routineEnd(n, key)) + '</span>';
     if (tag === 'Deadline') { const b = deadlineBadge(key); meta += '<span class="dl-badge' + (b.late ? ' late' : '') + '">' + b.text + '</span>'; }
 
-    html += '<div class="note-item' + (tag === 'Penting' ? ' is-penting' : '') + '">' +
+    html += '<div class="note-item' + (tag === 'Penting' ? ' is-penting' : '') + '" data-tag="' + escapeHtml(tag) + '">' +
       '<div class="note-item-left">' +
         '<div style="display:flex;align-items:center;gap:8px">' + checkbox +
           '<span class="note-item-text" style="' + textStyle + '">' + escapeHtml(n.text) + '</span></div>' +
@@ -1251,6 +1288,7 @@ function toggleDrawer(open) {
   if (!backdrop || !panel) return;
   if (open) {
     renderDrawerQuickProfiles();
+    updateAccountUi();
     applyThemeColor();
     backdrop.classList.add('active');
     panel.classList.add('active');
@@ -1303,12 +1341,12 @@ function renderManageProfiles() {
   if (!container) return;
   let html = '';
   appData.profiles.forEach(p => {
-    const isOnly = appData.profiles.length <= 1 || p.id === MAIN_PROFILE_ID;
+    const isOnly = appData.profiles.length <= 1 || p.isMain === true;
     html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px">' +
       '<div style="display:flex;align-items:center;gap:8px">' +
       '<span class="chip-dot" style="background:' + (p.color || '#60a5fa') + '"></span>' +
       '<span style="font-weight:600">' + escapeHtml(p.name) + '</span>' +
-      (p.id === MAIN_PROFILE_ID ? '<span style="font-size:0.6rem;color:var(--profile-color);border:1px solid var(--profile-color);border-radius:4px;padding:0 5px">Utama</span>' : '') +
+      (p.isMain ? '<span style="font-size:0.6rem;color:var(--profile-color);border:1px solid var(--profile-color);border-radius:4px;padding:0 5px">Utama</span>' : '') +
       '<span style="font-size:0.65rem;color:var(--sub)">' + noteCountOf(p) + ' ctt' + (p.synced ? ' • ☁️' : ' • ⚠️ lokal') + '</span>' +
       '</div>' +
       '<div style="display:flex;gap:6px">' +
@@ -1334,7 +1372,7 @@ async function handleCreateProfile(e) {
 
   const color = PALETTES[appData.profiles.length % PALETTES.length];
   const newId = 'p_' + Date.now();
-  const newProf = { id: newId, name: name, color: color, notes: {}, synced: false };
+  const newProf = { id: newId, name: name, color: color, notes: {}, synced: false, ownerId: session ? session.mainId : null, isMain: false };
 
   appData.profiles.push(newProf);
   appData.activeProfileId = newId;
@@ -1351,7 +1389,7 @@ async function handleCreateProfile(e) {
   }
 
   const r = await sbCall('buat profil "' + name + '"', c =>
-    c.from('cal_profiles').insert([{ id: newId, name: name, color: color }]));
+    c.from('cal_profiles').insert([{ id: newId, name: name, color: color, owner_id: session ? session.mainId : null }]));
 
   if (!r.ok) {
     appData.profiles = appData.profiles.filter(p => p.id !== newId);
@@ -1401,7 +1439,8 @@ async function promptRenameProfile(id) {
 }
 
 async function handleDeleteProfile(id) {
-  if (id === MAIN_PROFILE_ID) {
+  const target = appData.profiles.find(x => x.id === id);
+  if (target && target.isMain) {
     alert('Profil Utama tidak bisa dihapus.');
     return;
   }
@@ -1705,7 +1744,7 @@ async function runConnectionTest() {
   push('Menguji TULIS (insert + hapus baris uji) …');
   const tid = 'p_test_' + Date.now();
   const r3 = await sbCall('tes: tulis cal_profiles', c =>
-    c.from('cal_profiles').insert([{ id: tid, name: 'Tes Koneksi', color: '#60a5fa' }]));
+    c.from('cal_profiles').insert([{ id: tid, name: 'Tes Koneksi', color: '#60a5fa', owner_id: session ? session.mainId : null }]));
   push('  insert  : ' + (r3.ok ? 'BERHASIL' : 'GAGAL'));
   if (!r3.ok && r3.error) push('  error   : ' + errText(r3.error));
   if (r3.ok) {
@@ -1769,6 +1808,7 @@ function bindAllUi() {
   });
   bind('menu-btn-help', () => { toggleDrawer(false); openModal('modal-help'); });
   bind('menu-btn-about', () => { toggleDrawer(false); openModal('modal-about'); });
+  bind('menu-btn-logout', handleLogout);
   bindStatusPill();
 
   const form = document.getElementById('form-add-note');
@@ -1788,6 +1828,219 @@ function bindAllUi() {
   window.addEventListener('offline', () => { logWarn('Tidak ada koneksi internet (mode offline).'); setSync('error', 'offline'); });
 }
 
+/* ================================================================
+   11. AUTENTIKASI — nama, lalu verifikasi tanggal lahir (DIVERIFIKASI DI SERVER)
+   Tanggal lahir tidak pernah dibaca ke aplikasi: server hanya menjawab cocok/tidak.
+   ================================================================ */
+const auth = { step: 'loading', name: '', picked: null, mode: 'login', busy: false };
+const aid = id => document.getElementById(id);
+
+function loadSession() {
+  try {
+    const r = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    if (r && r.token && r.mainId) session = r;
+  } catch (e) { session = null; }
+  return session;
+}
+function saveSession(x) {
+  session = x;
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(x)); } catch (e) {}
+}
+function clearSession() {
+  session = null;
+  try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+}
+
+function authSetError(msg) { const e = aid('auth-error'); if (e) e.textContent = msg || ''; }
+function authHide() { const scr = aid('auth-screen'); if (scr) scr.style.display = 'none'; }
+function authBusy(on) {
+  auth.busy = on;
+  document.querySelectorAll('#auth-screen button, #auth-screen input').forEach(b => { b.disabled = on; });
+}
+
+function authShow(step) {
+  auth.step = step;
+  const show = (id, on) => { const e = aid(id); if (e) e.style.display = on ? '' : 'none'; };
+  show('auth-loading', step === 'loading');
+  show('auth-form-name', step === 'name');
+  show('auth-step-pick', step === 'pick');
+  show('auth-form-birth', step === 'birth');
+  const sub = aid('auth-sub');
+  if (sub) sub.textContent = ({ loading: 'Memuat…', name: 'Masukkan nama untuk masuk', pick: 'Pilih profilmu', birth: 'Verifikasi tanggal lahir' })[step] || '';
+  authSetError('');
+  const scr = aid('auth-screen');
+  if (scr) scr.style.display = 'flex';
+  const focusId = step === 'name' ? 'auth-input-name' : (step === 'birth' ? 'auth-input-birth' : null);
+  if (focusId) setTimeout(() => { const i = aid(focusId); if (i && !i.disabled) i.focus(); }, 60);
+}
+
+function authReasonText(res) {
+  switch (res && res.reason) {
+    case 'wrong': return 'Tanggal lahir tidak cocok. Coba lagi.';
+    case 'locked': return 'Terlalu banyak percobaan salah. Coba lagi dalam ' + Math.max(1, Math.ceil((res.retry_after_sec || 60) / 60)) + ' menit.';
+    case 'no_birth': return 'Profil ini belum punya tanggal lahir terdaftar. Isi kolom birth_date di Supabase lebih dulu.';
+    case 'name_taken': return 'Nama itu sudah dipakai Profil Utama lain. Tambahkan inisial atau nama belakang.';
+    case 'bad_name': return 'Nama tidak valid (2–40 karakter).';
+    case 'bad_birth': return 'Tanggal lahir tidak valid.';
+    case 'not_found': return 'Profil tidak ditemukan. Mulai lagi dari awal.';
+    default: return 'Verifikasi gagal.';
+  }
+}
+function authNetText(err) {
+  if (err && /PGRST202|Could not find the function|does not exist/i.test(errText(err))) {
+    return 'Fungsi login belum ada di database. Jalankan kalender_schema.sql di Supabase.';
+  }
+  return 'Tidak bisa terhubung ke server. Periksa internet, lalu coba lagi.';
+}
+
+async function authSubmitName(e) {
+  if (e) e.preventDefault();
+  if (auth.busy) return;
+  const name = (aid('auth-input-name').value || '').trim().replace(/\s+/g, ' ');
+  if (name.length < 2) { authSetError('Nama minimal 2 huruf.'); return; }
+  if (!supabaseClient) { authSetError('Masuk membutuhkan koneksi internet dan pustaka cloud.'); return; }
+  auth.name = name;
+  authBusy(true); authSetError('');
+  const r = await sbCall('cari nama profil', c => c.rpc('cal_find_main', { p_name: name }));
+  authBusy(false);
+  if (!r.ok) { authSetError(authNetText(r.error)); return; }
+  const list = Array.isArray(r.data) ? r.data : [];
+  if (!list.length) { auth.mode = 'register'; auth.picked = null; authOpenBirth(); return; }
+  authRenderCandidates(list);
+  authShow('pick');
+}
+
+function authRenderCandidates(list) {
+  const box = aid('auth-candidates');
+  if (!box) return;
+  box.textContent = '';
+  list.forEach(c => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'auth-cand';
+    const dot = document.createElement('span');
+    dot.className = 'chip-dot';
+    dot.style.background = c.color || '#60a5fa';
+    const t = document.createElement('span');
+    t.textContent = c.name;
+    b.appendChild(dot); b.appendChild(t);
+    b.onclick = () => { auth.picked = c; auth.mode = 'login'; authOpenBirth(); };
+    box.appendChild(b);
+  });
+}
+
+function authOpenBirth() {
+  authShow('birth');
+  const hint = aid('auth-birth-hint'), btn = aid('auth-birth-btn'), inp = aid('auth-input-birth');
+  if (inp) { inp.value = ''; inp.max = todayKey(); inp.min = '1900-01-01'; }
+  if (auth.mode === 'register') {
+    if (hint) hint.textContent = 'Nama "' + auth.name + '" belum terdaftar. Masukkan tanggal lahir untuk membuat Profil Utama baru. Tanggal ini dipakai untuk verifikasi setiap kali kamu masuk.';
+    if (btn) btn.textContent = 'Buat Profil & Masuk';
+  } else {
+    if (hint) hint.textContent = 'Verifikasi: masukkan tanggal lahir untuk "' + auth.picked.name + '".';
+    if (btn) btn.textContent = 'Masuk';
+  }
+}
+
+async function authSubmitBirth(e) {
+  if (e) e.preventDefault();
+  if (auth.busy) return;
+  const inp = aid('auth-input-birth');
+  const birth = inp ? inp.value : '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birth)) { authSetError('Isi tanggal lahir.'); return; }
+  if (birth > todayKey() || birth < '1900-01-01') { authSetError('Tanggal lahir tidak valid.'); return; }
+  if (!supabaseClient) { authSetError('Masuk membutuhkan koneksi internet dan pustaka cloud.'); return; }
+
+  authBusy(true); authSetError('');
+  const r = (auth.mode === 'register')
+    ? await sbCall('buat Main Profile baru', c => c.rpc('cal_register_main', { p_name: auth.name, p_birth: birth, p_color: PALETTES[0] }))
+    : await sbCall('verifikasi login', c => c.rpc('cal_login', { p_id: auth.picked.id, p_birth: birth }));
+  authBusy(false);
+  if (inp) inp.value = '';                 // tanggal lahir tidak dibiarkan tersimpan di layar
+  if (!r.ok) { authSetError(authNetText(r.error)); return; }
+  const res = r.data || {};
+  if (res.ok && res.token && res.profile) { await authSuccess(res); return; }
+  authSetError(authReasonText(res));
+}
+
+async function authSuccess(res) {
+  saveSession({ token: res.token, mainId: res.profile.id, name: res.profile.name });
+  supabaseClient = makeClient(session.token);
+  authHide();
+  logOk('Masuk sebagai "' + res.profile.name + '".');
+  await enterApp();
+}
+
+/* Masuk ke kalender: cache lokal hanya dipakai jika milik akun ini */
+async function enterApp() {
+  let legacyRaw = null;
+  try { legacyRaw = localStorage.getItem(CACHE_KEY); } catch (e) {}
+  loadLocalCache();
+  if (!appData.profiles.some(p => p.id === session.mainId)) {
+    // cache kosong / bukan milik akun ini: mulai dari kerangka bersih
+    try {
+      if (legacyRaw && !JSON.parse(legacyRaw).ownerMainId && !localStorage.getItem('kalender_cache_legacy')) {
+        localStorage.setItem('kalender_cache_legacy', legacyRaw);   // jaring pengaman data lama
+      }
+    } catch (e) {}
+    appData = {
+      activeProfileId: session.mainId,
+      profiles: [{ id: session.mainId, name: session.name, color: PALETTES[0], notes: {}, synced: true, ownerId: session.mainId, isMain: true }],
+      tags: ['Catatan', 'Penting', 'Ide', 'Deadline', 'Routine']
+    };
+  }
+  updateAccountUi();
+  applyThemeColor();
+  try { render(); } catch (e) { logErr('Gagal render kalender.', errText(e)); }
+  if (supabaseClient) await syncAll('masuk akun'); else saveLocalCache();
+  updateAccountUi();
+  renderDiagStatus();
+}
+
+function updateAccountUi() {
+  const n = aid('account-name');
+  if (n) n.textContent = session ? session.name : '—';
+}
+
+/* Keluar: hapus sesi + bersihkan data di perangkat ini (data cloud tetap aman) */
+async function handleLogout() {
+  toggleDrawer(false);
+  let msg = 'Keluar dari akun "' + (session ? session.name : '') + '"?\nData di perangkat ini akan dibersihkan; data di cloud tetap aman.';
+  if (syncState !== 'ok') msg += '\n\n⚠️ Status sinkron belum OK — catatan yang belum terunggah akan hilang dari perangkat ini.';
+  if (!confirm(msg)) return;
+  const tok = session ? session.token : null;
+  if (tok && supabaseClient) { try { await sbCall('keluar akun', c => c.rpc('cal_logout', { p_token: tok })); } catch (e) {} }
+  resetToLoggedOut();
+  authShow('name');
+}
+
+function resetToLoggedOut() {
+  clearSession();
+  try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
+  appData = {
+    activeProfileId: 'p_default',
+    profiles: [{ id: 'p_default', name: 'Profil A', color: '#60a5fa', notes: {}, synced: false }],
+    tags: ['Catatan', 'Penting', 'Ide', 'Deadline', 'Routine']
+  };
+  selectedDateKey = null;
+  supabaseClient = sdkReady() ? makeClient(null) : null;
+  document.querySelectorAll('.modal-backdrop.active').forEach(m => m.classList.remove('active'));
+  ['cal', 'holiday-list', 'note-items-container'].forEach(id => { const e = aid(id); if (e) e.innerHTML = ''; });
+  const ni = aid('auth-input-name'); if (ni) ni.value = '';
+  const bi = aid('auth-input-birth'); if (bi) bi.value = '';
+  auth.name = ''; auth.picked = null; auth.mode = 'login';
+  try { applyThemeColor(); } catch (e) {}
+  updateAccountUi();
+}
+
+function bindAuthUi() {
+  const f1 = aid('auth-form-name'); if (f1) f1.addEventListener('submit', authSubmitName);
+  const f2 = aid('auth-form-birth'); if (f2) f2.addEventListener('submit', authSubmitBirth);
+  const nb = aid('auth-btn-newprofile'); if (nb) nb.onclick = () => { auth.mode = 'register'; auth.picked = null; authOpenBirth(); };
+  const b1 = aid('auth-back-1'); if (b1) b1.onclick = () => authShow('name');
+  const b2 = aid('auth-back-2'); if (b2) b2.onclick = () => authShow(auth.mode === 'register' ? 'name' : 'pick');
+}
+
 async function initApp() {
   logInfo('Kalender Canvas ' + APP_VERSION + ' mulai dimuat.', 'Halaman: ' + location.href);
   logInfo('Waktu perangkat: ' + new Date().toLocaleString('id-ID'));
@@ -1800,31 +2053,41 @@ async function initApp() {
   } catch (e) {}
 
   bindAllUi();
-  loadLocalCache();
+  bindAuthUi();
+  loadSession();
+  authShow('loading');                       // layar tertutup sampai status login jelas: tidak ada data yang sempat bocor
+  setTimeout(() => {
+    if (auth.step === 'loading') { authShow('name'); authSetError('Memuat terlalu lama. Periksa koneksi lalu muat ulang.'); }
+  }, 12000);
   updateStatusPill();
+  loadStaticData();                          // libur + tabel hijri (data publik)
 
-  // Tampilkan kalender segera (jangan biarkan layar kosong kalau jaringan lambat)
-  try { render(); } catch (e) { logErr('Gagal render awal kalender.', errText(e)); }
-
-  // Data statis (libur + tabel hijri)
-  loadStaticData();
-
-  // Supabase
   const siap = await initSupabase();
-  if (siap) {
-    await syncAll('pemuatan awal');
-    if (syncState === 'ok') {
-      const total = totalLocalNotes();
-      if (total > 0 && (localStorage.getItem('kalender_last_upload') === null)) {
-        logInfo('Catatan lokal belum pernah diunggah — buka Diagnostik lalu ketuk "Unggah Data Lokal" bila ingin menyalinnya ke cloud.');
-      }
-    }
-  } else {
-    saveLocalCache();
-    render();
+
+  if (!session) {
+    authShow('name');
+    if (!siap) authSetError('Pustaka cloud/koneksi belum siap — masuk membutuhkan internet.');
+    renderDiagStatus();
+    return;
   }
 
-  renderDiagStatus();
+  // Ada sesi tersimpan: validasi ke server bila online
+  if (siap) {
+    const who = await sbCall('cek sesi', c => c.rpc('cal_whoami', { p_token: session.token }));
+    if (who.ok && who.data && who.data.ok === false) {
+      logWarn('Sesi tidak berlaku lagi — silakan masuk ulang.');
+      resetToLoggedOut();
+      authShow('name');
+      authSetError('Sesi berakhir. Silakan masuk lagi.');
+      return;
+    }
+    if (who.ok && who.data && who.data.ok && who.data.profile) {
+      session.name = who.data.profile.name;
+      saveSession(session);
+    }
+  }
+  authHide();
+  await enterApp();
   logInfo('Inisialisasi selesai. Status: ' + syncState + '.');
 }
 
