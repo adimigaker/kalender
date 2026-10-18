@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<title>Kalender Canvas v27</title>
+<title>Kalender Canvas v28</title>
 <style>
 :root{
   --bg:#0f172a;--card:#162032;--card-hover:#1e293b;--text:#e2e8f0;--sub:#94a3b8;
@@ -73,12 +73,20 @@ header{padding:0.6rem 0;display:flex;align-items:center;justify-content:space-be
 .today{outline:2px solid var(--profile-color);outline-offset:-2px;z-index:2}
 .holiday-cell .g{color:var(--red)}
 
-/* Note indicator dot on calendar cell */
+/* Multi-dot indikator catatan di sel kalender */
 .note-indicators{
-  position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
-  display:flex;gap:2px;align-items:center;pointer-events:none;z-index:3;
+  position:absolute;bottom:3px;left:0;right:0;
+  display:flex;gap:3px;justify-content:center;align-items:center;pointer-events:none;z-index:3;
 }
-.note-badge-dot{width:4px;height:4px;border-radius:50%;background:var(--profile-color);box-shadow:0 0 3px var(--profile-color)}
+.dot{position:relative;width:5px;height:5px;border-radius:50%;flex:none;pointer-events:auto;cursor:pointer}
+.dot::after{content:"";position:absolute;top:-4px;bottom:-4px;left:-1.5px;right:-1.5px}
+.dot-catatan{background:var(--c-catatan);box-shadow:0 0 4px var(--c-catatan)}
+.dot-penting{background:var(--c-penting);box-shadow:0 0 4px var(--c-penting)}
+.dot-ide{background:var(--c-ide);box-shadow:0 0 4px var(--c-ide)}
+.dot-deadline{background:var(--c-deadline);box-shadow:0 0 4px var(--c-deadline)}
+.dot-routine{background:var(--c-routine);box-shadow:0 0 4px var(--c-routine)}
+.note-item.flash{animation:noteflash 1.3s ease}
+@keyframes noteflash{0%,60%{background:rgba(96,165,250,.28)}100%{background:transparent}}
 
 /* Info Container Section (Merged Libur & User Notes) */
 .info-container{margin-top:16px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:0.8rem}
@@ -199,9 +207,7 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
 }
 
 /* Date Notes Modal */
-.penting-cell{background:rgba(250,204,21,0.13);box-shadow:inset 0 0 0 1px rgba(250,204,21,0.75)}
 .penting-cell:not(.holiday-cell) .g{color:var(--c-penting)}
-.note-badge-penting{display:inline-block;width:6px;height:6px;background:var(--c-penting);border-radius:50%;box-shadow:0 0 4px var(--c-penting)}
 .date-notes-header-info{display:flex;flex-direction:column;gap:2px}
 .date-masehi-title{font-size:1.1rem;font-weight:700}
 .date-hijri-pasaran{font-size:0.75rem;color:var(--sub)}
@@ -253,6 +259,25 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
 .rt-check{width:16px;height:16px;vertical-align:middle;margin-left:6px;accent-color:var(--c-routine);cursor:pointer}
 .rt-hint{font-size:.62rem;color:var(--sub);margin-left:2px}
 
+/* Layar login (nama -> tanggal lahir) */
+.auth-screen{position:fixed;inset:0;z-index:400;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px}
+.auth-card{width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px;text-align:center}
+.auth-logo svg{width:44px;height:44px;stroke:var(--profile-color);stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.auth-title{margin:0;font-size:1.5rem;font-weight:800;color:var(--text)}
+.auth-sub{margin:0 0 4px;font-size:.85rem;color:var(--sub)}
+.auth-step{display:flex;flex-direction:column;gap:10px;text-align:left}
+.auth-input{font-size:1rem;padding:12px 14px}
+.auth-btn{width:100%;padding:12px 14px;font-size:.95rem}
+.auth-hint{font-size:.8rem;color:var(--sub);line-height:1.45}
+.auth-cand{display:flex;align-items:center;gap:10px;width:100%;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:12px 14px;font-size:.95rem;font-weight:600;cursor:pointer;margin-bottom:8px;text-align:left}
+.auth-cand:active{background:var(--border)}
+.auth-link{background:none;border:none;color:var(--sub);font-size:.8rem;padding:6px;cursor:pointer;text-align:center}
+.auth-error{min-height:1.2em;font-size:.8rem;color:var(--red);line-height:1.4}
+.account-line{font-size:.8rem;color:var(--sub);padding:2px 2px 8px}
+.account-line b{color:var(--text)}
+.menu-item.logout{color:var(--red)}
+.menu-item.logout .menu-icon{stroke:var(--red)}
+
 /* Color palettes picker */
 .color-swatches{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0}
 .swatch{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform 0.15s}
@@ -302,6 +327,38 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
 </style>
 </head>
 <body>
+
+<!-- ================= LAYAR LOGIN ================= -->
+<div class="auth-screen" id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></div>
+    <h1 class="auth-title">Kalender Canvas</h1>
+    <p class="auth-sub" id="auth-sub">Memuat…</p>
+
+    <div id="auth-loading" class="auth-hint" style="text-align:center">Menyiapkan aplikasi…</div>
+
+    <form id="auth-form-name" class="auth-step" style="display:none" autocomplete="off">
+      <input class="form-input auth-input" id="auth-input-name" type="text" placeholder="Nama kamu" maxlength="40" autocapitalize="words" enterkeyhint="go">
+      <button class="btn-primary auth-btn" type="submit">Lanjut →</button>
+    </form>
+
+    <div id="auth-step-pick" class="auth-step" style="display:none">
+      <div class="auth-hint">Ada nama yang cocok. Pilih salah satu:</div>
+      <div id="auth-candidates"></div>
+      <button class="btn-secondary auth-btn" type="button" id="auth-btn-newprofile">Bukan salah satunya — buat profil baru</button>
+      <button class="auth-link" type="button" id="auth-back-1">← Ganti nama</button>
+    </div>
+
+    <form id="auth-form-birth" class="auth-step" style="display:none" autocomplete="off">
+      <div class="auth-hint" id="auth-birth-hint"></div>
+      <input class="form-input auth-input" id="auth-input-birth" type="date" required>
+      <button class="btn-primary auth-btn" type="submit" id="auth-birth-btn">Masuk</button>
+      <button class="auth-link" type="button" id="auth-back-2">← Kembali</button>
+    </form>
+
+    <div class="auth-error" id="auth-error"></div>
+  </div>
+</div>
 <div class="container" id="touch-area">
 
 <!-- 1. Top App Bar (Header Native) -->
@@ -335,7 +392,7 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
 <div id="holiday-list" class="info-container" style="display:none"></div>
 
 <!-- 4. Footer -->
-<footer>Kalender Canvas v27 — Supabase Routine Sync + Category Buttons</footer>
+<footer>Kalender Canvas v28 — Supabase Routine Sync + Category Buttons</footer>
 </div>
 
 <!-- Banner kegagalan pustaka Supabase (dibaca sebelum app.js jalan) -->
@@ -443,6 +500,18 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
       <svg class="menu-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
       <span class="menu-text">Tentang Aplikasi</span>
       <svg class="menu-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </button>
+  </div>
+
+  <div class="cluster-divider"></div>
+
+  <!-- Klaster Akun -->
+  <div class="menu-cluster">
+    <div class="cluster-label">Akun</div>
+    <div class="account-line">Masuk sebagai <b id="account-name">—</b></div>
+    <button class="menu-item logout" id="menu-btn-logout">
+      <svg class="menu-icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+      <span class="menu-text">Keluar Akun</span>
     </button>
   </div>
 </aside>
@@ -633,7 +702,7 @@ footer{text-align:center;padding:12px 0;font-size:.7rem;color:var(--sub);border-
       <button class="close-btn" onclick="closeModal('modal-about')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
     </div>
     <div style="font-size:0.8rem;color:var(--sub);display:flex;flex-direction:column;gap:6px;line-height:1.4">
-      <strong style="color:var(--text);font-size:0.95rem">Kalender Canvas v27</strong>
+      <strong style="color:var(--text);font-size:0.95rem">Kalender Canvas v28</strong>
       <span>Aplikasi Kalender Masehi + Hijriyah + Pasaran Jawa + Canvas Multi-Profil dengan sinkronisasi Supabase.</span>
       <div style="margin-top:6px;padding:8px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
         <span>Tabel cloud: <code>cal_profiles</code> &amp; <code>cal_items</code>.</span><br>
@@ -671,7 +740,7 @@ var __sdkPrimary = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/di
 var __sdkFallback = 'https://unpkg.com/@supabase/supabase-js@2.58.0/dist/umd/supabase.js';
 
 function __bootApp() {
-  __loadScript('app.js?v=31', function () {
+  __loadScript('app.js?v=32', function () {
     window.__APP_BOOT.sdk = (window.supabase && window.supabase.createClient) ? 'siap' : 'siap-tanpa-global';
   }, function () {
     __showSdkBanner('app.js gagal dimuat dari server. Periksa koneksi internet lalu muat ulang halaman.');
