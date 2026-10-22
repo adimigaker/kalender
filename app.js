@@ -2055,10 +2055,8 @@ async function initApp() {
   bindAllUi();
   bindAuthUi();
   loadSession();
-  authShow('loading');                       // layar tertutup sampai status login jelas: tidak ada data yang sempat bocor
-  setTimeout(() => {
-    if (auth.step === 'loading') { authShow('name'); authSetError('Memuat terlalu lama. Periksa koneksi lalu muat ulang.'); }
-  }, 12000);
+  authShow('loading');                       // layar tertutup sampai status login jelas
+
   updateStatusPill();
   loadStaticData();                          // libur + tabel hijri (data publik)
 
@@ -2071,21 +2069,30 @@ async function initApp() {
     return;
   }
 
-  // Ada sesi tersimpan: validasi ke server bila online
+  // Ada sesi tersimpan di localStorage:
+  // JANGAN keluarkan pengguna hanya karena timeout/masalah jaringan.
+  // Cukup validasi jika server merespons secara eksplisit.
   if (siap) {
-    const who = await sbCall('cek sesi', c => c.rpc('cal_whoami', { p_token: session.token }));
-    if (who.ok && who.data && who.data.ok === false) {
-      logWarn('Sesi tidak berlaku lagi — silakan masuk ulang.');
-      resetToLoggedOut();
-      authShow('name');
-      authSetError('Sesi berakhir. Silakan masuk lagi.');
-      return;
-    }
-    if (who.ok && who.data && who.data.ok && who.data.profile) {
-      session.name = who.data.profile.name;
-      saveSession(session);
+    try {
+      const who = await sbCall('cek sesi', c => c.rpc('cal_whoami', { p_token: session.token }));
+      // Hanya keluarkan user jika server MENGEMBALIKAN respons resmi ok === false (sesi dicabut di cloud)
+      if (who.ok && who.data && who.data.ok === false) {
+        logWarn('Sesi dicabut dari server — silakan masuk ulang.');
+        resetToLoggedOut();
+        authShow('name');
+        authSetError('Sesi dicabut dari server. Silakan masuk lagi.');
+        return;
+      }
+      if (who.ok && who.data && who.data.ok && who.data.profile) {
+        session.name = who.data.profile.name;
+        saveSession(session);
+      }
+    } catch (e) {
+      logWarn('Gagal cek sesi ke cloud (offline/lambat), tetap gunakan sesi lokal.', errText(e));
     }
   }
+
+  // Masuk ke aplikasi dengan sesi lokal yang ada
   authHide();
   await enterApp();
   logInfo('Inisialisasi selesai. Status: ' + syncState + '.');
